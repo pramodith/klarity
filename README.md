@@ -1,2 +1,2 @@
-# klarity
+# Klarity
 See Through Your Models
