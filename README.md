@@ -6,6 +6,24 @@
   **See Through Your Models**
 </div>
 
+<div align="center">
+  <img src="assets/klaralabs.png" alt="Klara Labs" width="200"/>
+
+  # Klarity 
+
+  **See Through Your Models**
+</div>
+
+## 🤖 Supported Models
+
+| Model | Size | Status | Notes |
+|-------|-------|--------|--------|
+| Llama 2 | 8B | ✅ Tested | Full compatibility with uncertainty metrics |
+| Qwen | 0.5B | ✅ Tested | Full compatibility with uncertainty metrics |
+
+> **Note**: More models are being tested and will be added to the list. If you'd like to contribute by testing additional models, please submit a PR!
+
+
 ## 🚀 Installation
 
 1. Install Poetry (our package manager):
