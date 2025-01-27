@@ -1,3 +1,5 @@
+<link href="https://fonts.googleapis.com/css2?family=Petrona:wght@400;500;600&display=swap" rel="stylesheet">
+
 <div align="center">
   <p>
     <img src="assets/klaralabs.png" alt="Klarity Banner" width="200"/>
@@ -7,5 +9,3 @@
   <p style="font-family: 'Petrona', serif;">See Through Your Models</p>
 </div>
 
-<!-- Add this in your README to import the Petrona font -->
-<link href="https://fonts.googleapis.com/css2?family=Petrona:wght@400;500;600&display=swap" rel="stylesheet">
