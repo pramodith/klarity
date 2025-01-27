@@ -1,10 +1,7 @@
 <div align="center">
   <img src="assets/klaralabs.png" alt="Klara Labs" width="200"/>
-  <br/>
-  <br/>
-  <img src="assets/test.png" alt="Klara Labs Demo" width="200"/>
 
-  # Klarity
+  # Klarity 
 
   **See Through Your Models**
 </div>
