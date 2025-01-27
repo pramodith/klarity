@@ -3,7 +3,7 @@
 
   # Klarity 
 
-  **See Through Your Models**
+  _Understand what your model is thinking_
 </div>
 
 
