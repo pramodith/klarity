@@ -11,20 +11,13 @@
 
 ## 🎯 Overview
 
-Klarity is a powerful tool for understanding the semantic uncertainty in language model outputs. Unlike traditional confidence scores, Klarity combines advanced semantic analysis with LLM-powered insights to give you a clear understanding of your model's uncertainty.
+Klarity is a powerful tool for understanding the uncertainty in language model outputs. Unlike traditional confidence scores, Klarity combines advanced analysis with LLM-powered insights to give you a clear understanding of your model's behaviour.
 
-### What sets Klarity apart?
+### 🔍 What sets Klarity apart?
 
 - **Semantic Analysis**: Goes beyond raw probability distributions to understand the meaning-based uncertainty
-- **Intelligent Insights**: LLM-powered analysis of semantic patterns and clusters
-- **Actionable Recommendations**: Get clear suggestions for handling uncertainty cases
-
-## 🔍 How It Works
-
-1. **Semantic Analysis**: Klarity analyzes the semantic space of possible responses
-2. **Cluster Detection**: Identifies distinct semantic groupings in model outputs
-3. **Insight Generation**: An LLM analyzes the patterns and provides human-readable insights
-4. **Recommendations**: Get actionable suggestions for handling uncertainty
+- **Intelligent Insights**: LLM-powered analysis of semantic patterns
+- **Actionable Recommendations**: Get actionable suggestions for handling uncertainty cases
 
 ## 🤖 Supported Models
 
@@ -33,10 +26,6 @@ Klarity is a powerful tool for understanding the semantic uncertainty in languag
 | GPT-NeoX | 20B | ✅ Tested | Full semantic analysis support |
 | LLaMA 2 | 7B | ✅ Tested | Optimized cluster analysis |
 | Qwen | 0.5B | ✅ Tested | Fast analysis, great for testing |
-| Mistral | 7B | ✅ Tested | Strong semantic metrics |
-| BLOOM | 7B | ✅ Tested | Robust uncertainty detection |
-| Pythia | 12B | ✅ Tested | Good semantic clustering |
-| Falcon | 7B | ✅ Tested | Efficient analysis support |
 
 > **Note**: More models are being tested and will be added to the list. If you'd like to contribute by testing additional models, please submit a PR!
 
@@ -106,21 +95,13 @@ Recommendations:
 
 ### Quality Assurance
 - Detect and understand edge cases with LLM-powered insights
-- Monitor semantic coherence with explained metrics
+- Monitor coherence with explained metrics
 - Get actionable feedback for handling ambiguous cases
 
 ### Model Improvement
 - Use semantic insights and recommendations for fine-tuning
-- Understand semantic patterns in model responses
+- Understand patterns in model responses
 - Get suggestions for training data improvements
-
-## 📚 Documentation
-
-Detailed documentation is available in our [Wiki](https://github.com/yourusername/klarity/wiki), including:
-- Semantic Metrics Guide
-- Understanding LLM Insights
-- Implementation Examples
-- Best Practices
 
 ## 🤝 Contributing
 
@@ -138,5 +119,5 @@ MIT License. See [LICENSE](LICENSE) for more information.
 
 ## 📫 Community & Support
 
-- [GitHub Issues](https://github.com/yourusername/klarity/issues) for bugs and features
-- [GitHub Discussions](https://github.com/yourusername/klarity/discussions) for questions and community discussions
+- [GitHub Issues](https://github.com/klaralabs/klarity/issues) for bugs and features
+- [GitHub Discussions](https://github.com/klaralabs/klarity/discussions) for questions and community discussions
