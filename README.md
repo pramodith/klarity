@@ -11,23 +11,34 @@
 
 ## 🎯 Overview
 
-Klarity is a powerful tool for understanding the semantic uncertainty in language model outputs. Unlike traditional confidence scores, Klarity analyzes the semantic space of possible responses to provide deep insights into your model's uncertainty.
+Klarity is a powerful tool for understanding the semantic uncertainty in language model outputs. Unlike traditional confidence scores, Klarity combines advanced semantic analysis with LLM-powered insights to give you a clear understanding of your model's uncertainty.
 
 ### What sets Klarity apart?
 
-- **Semantic Analysis**: Goes beyond raw probability distributions to understand the meaning-based uncertainty in model outputs
-- **Cluster Insights**: Identifies semantic groupings in the model's potential responses
-- **Quality Metrics**: Provides comprehensive metrics about response coherence and diversity
+- **Semantic Analysis**: Goes beyond raw probability distributions to understand the meaning-based uncertainty
+- **Intelligent Insights**: LLM-powered analysis of semantic patterns and clusters
+- **Actionable Recommendations**: Get clear suggestions for handling uncertainty cases
 
-## 🔍 Semantic Uncertainty Insights
+## 🔍 How It Works
 
-Klarity provides several key metrics:
+1. **Semantic Analysis**: Klarity analyzes the semantic space of possible responses
+2. **Cluster Detection**: Identifies distinct semantic groupings in model outputs
+3. **Insight Generation**: An LLM analyzes the patterns and provides human-readable insights
+4. **Recommendations**: Get actionable suggestions for handling uncertainty
 
-| Metric | Description | Use Case |
-|--------|-------------|----------|
-| Semantic Entropy | Measures uncertainty in the meaning space | Identify when your model is considering semantically different responses |
-| Cluster Quality | Evaluates the coherence of response clusters | Detect when responses are well-organized vs scattered |
-| Variance Entropy | Quantifies the stability of model responses | Monitor response consistency over multiple runs |
+## 🤖 Supported Models
+
+| Model | Type | Status | Notes |
+|-------|------|--------|--------|
+| GPT-NeoX | 20B | ✅ Tested | Full semantic analysis support |
+| LLaMA 2 | 7B | ✅ Tested | Optimized cluster analysis |
+| Qwen | 0.5B | ✅ Tested | Fast analysis, great for testing |
+| Mistral | 7B | ✅ Tested | Strong semantic metrics |
+| BLOOM | 7B | ✅ Tested | Robust uncertainty detection |
+| Pythia | 12B | ✅ Tested | Good semantic clustering |
+| Falcon | 7B | ✅ Tested | Efficient analysis support |
+
+> **Note**: More models are being tested and will be added to the list. If you'd like to contribute by testing additional models, please submit a PR!
 
 ## 🚀 Quick Start
 
@@ -42,62 +53,81 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from klarity import UncertaintyEstimator
 
 # Load your model
-model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+model_name = "mistralai/Mistral-7B-v0.1"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(model_name)
 
 # Initialize Klarity
 estimator = UncertaintyEstimator()
 
-# Get semantic insights
-metrics = estimator.estimate("What is the best programming language?", model, tokenizer)
+# Get semantic insights with explanations
+response = estimator.estimate(
+    "What is the best programming language for AI?", 
+    model, 
+    tokenizer
+)
 
-# Analyze the results
-print(f"Semantic Entropy: {metrics.semantic_entropy:.4f}")
-print(f"Cluster Quality: {metrics.cluster_quality:.4f}")
-print(f"Number of Semantic Clusters: {metrics.n_clusters}")
+# Access structured insights
+print(f"Semantic Entropy: {response.metrics.semantic_entropy:.4f}")
+print(f"Cluster Quality: {response.metrics.cluster_quality:.4f}")
+print(f"Number of Semantic Clusters: {response.metrics.n_clusters}")
+
+# Get LLM-powered analysis
+print("\nInsights:")
+print(f"Confidence Level: {response.insights.confidence_level}")
+print(f"Primary Factor: {response.insights.primary_factor}")
+print("\nRecommendations:")
+for rec in response.insights.recommendations:
+    print(f"- {rec}")
 ```
 
-## 🤖 Supported Models
+Example Output:
+```
+Semantic Entropy: 0.8234
+Cluster Quality: 0.7645
+Number of Semantic Clusters: 3
 
-| Model | Size | Status | Use Case |
-|-------|-------|--------|-----------|
-| Llama 3 | 8B | ✅ Tested | Great for general text generation analysis |
-| Qwen | 0.5B | ✅ Tested | Efficient for quick uncertainty assessments |
+Insights:
+Confidence Level: Medium
+Primary Factor: Multiple valid programming paradigms
 
-> **Note**: More models are being tested! If you'd like to contribute by testing additional models, please submit a PR.
+Recommendations:
+- Consider specifying the AI domain (ML, NLP, Computer Vision)
+- Add context about scalability requirements
+- Clarify if looking for research or production use case
+```
 
-## 💡 Example Use Cases
+## 💡 Use Cases
 
-### Model Understanding
-- Identify when your model is uncertain between distinct semantic concepts
-- Understand the coherence of your model's semantic space
-- Track how uncertainty changes with different prompts
+### Model Analysis
+- Understand when your model is considering multiple valid perspectives
+- Get explanations for uncertainty in specific domains
+- Receive suggestions for improving prompt clarity
 
 ### Quality Assurance
-- Detect edge cases where your model considers multiple valid but different responses
-- Monitor semantic stability across different versions of your model
-- Validate response quality through semantic clustering
+- Detect and understand edge cases with LLM-powered insights
+- Monitor semantic coherence with explained metrics
+- Get actionable feedback for handling ambiguous cases
 
 ### Model Improvement
-- Use semantic insights to guide model fine-tuning
-- Identify areas where your model needs more diverse training data
-- Optimize for semantic coherence in responses
+- Use semantic insights and recommendations for fine-tuning
+- Understand semantic patterns in model responses
+- Get suggestions for training data improvements
 
 ## 📚 Documentation
 
 Detailed documentation is available in our [Wiki](https://github.com/yourusername/klarity/wiki), including:
 - Semantic Metrics Guide
+- Understanding LLM Insights
 - Implementation Examples
-- Advanced Configuration
 - Best Practices
 
 ## 🤝 Contributing
 
 We welcome contributions! Whether it's:
 - Testing with new models
-- Adding new semantic analysis features
-- Improving documentation
+- Improving semantic analysis
+- Enhancing LLM insights
 - Sharing use cases
 
 See our [Contributing Guide](CONTRIBUTING.md) for details.
