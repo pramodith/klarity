@@ -22,59 +22,55 @@
 
 ## 🚀 Installation
 
-1. Install Poetry (our package manager):
+Install directly from GitHub:
 ```bash
-curl -sSL https://install.python-poetry.org | python3 -
+pip install git+https://github.com/yourusername/klarity.git
 ```
 
-2. Install Klarity and activate the environment:
+Optional: For development, clone the repository and install dependencies:
 ```bash
-poetry install
-poetry shell
+git clone https://github.com/yourusername/klarity.git
+cd klarity
+pip install -e .
 ```
 
 ## 🔧 Getting Started
 
-1. First, set up your environment with your API key:
+Here's how to get started with Klarity:
 
 ```python
-import os
-import logging
-
-# Set up logging configuration
-logging.basicConfig(level=logging.INFO)
-
-# Set your Klara Labs API key
-os.environ['KLARALABS_API_KEY'] = "your_api_key_here"
-```
-
-2. Track uncertainty in your models:
-
-```python
-from klaralabs.uncertainty import KlaraLabsUncertainty
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
-# Initialize KlaraLabs
-kl = KlaraLabsUncertainty.cloud(verbose=True)
+from klarity import UncertaintyEstimator
 
 # Load your model
 model_name = "Qwen/Qwen2.5-0.5B-Instruct"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(model_name)
 
+# Initialize the uncertainty estimator
+estimator = UncertaintyEstimator()
+
 # Estimate uncertainty
-uncertainty = kl.estimate("What is 1+1?", model, tokenizer)
-# Access metrics like semantic_entropy, raw_entropy, cluster_quality
+metrics = estimator.estimate("What is 1+1?", model, tokenizer)
+
+# Access the metrics
+print(f"Raw entropy: {metrics.raw_entropy:.4f}")
+print(f"Semantic entropy: {metrics.semantic_entropy:.4f}")
+print(f"Variance entropy: {metrics.varentropy:.4f}")
+print(f"Cluster quality: {metrics.cluster_quality:.4f}")
+print(f"Number of clusters: {metrics.n_clusters}")
 ```
 
 ## 📊 Features
 
-- Model uncertainty estimation
-- Semantic entropy analysis
-- Raw entropy calculation
-- Cluster quality assessment
-- Real-time monitoring of uncertainty metrics
-- Dashboard for visualization and tracking
+- Model uncertainty estimation through entropy analysis
+- Semantic clustering of token distributions
+- Multiple uncertainty metrics:
+  - Raw entropy for direct uncertainty measurement
+  - Semantic entropy for meaning-based uncertainty
+  - Variance entropy for response stability
+  - Cluster quality assessment
+  - Semantic cluster analysis
 
 ## 💡 Use Cases
 
@@ -86,12 +82,19 @@ uncertainty = kl.estimate("What is 1+1?", model, tokenizer)
 
 ## 📝 License
 
-[Add your license information here]
+MIT License. See [LICENSE](LICENSE) for more information.
 
 ## 🤝 Contributing
 
-We welcome contributions! Please feel free to submit a Pull Request.
+We welcome contributions! Here's how you can help:
+
+1. Fork the repository
+2. Create your feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
 
 ## 📫 Support
 
-For support and questions, please [open an issue](https://github.com/yourusername/klarity/issues) or contact us at [your contact information].
+- For bugs and feature requests, please [open an issue](https://github.com/yourusername/klarity/issues)
+- For questions and discussions, feel free to start a [GitHub Discussion](https://github.com/yourusername/klarity/discussions)
