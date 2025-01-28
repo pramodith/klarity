@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/klaralabs.png" alt="Klara Labs" width="200"/>
-
-  <img src="assets/detectivebird.png" alt="Mascotte" width="300" style="border-radius: 10px; margin: 20px 0;"/>
+  <br>
+  <img src="assets/detectivebird.jpeg" alt="Mascotte" width="300" style="border-radius: 10px; margin: 20px 0;"/>
 
   # Klarity 
 
