@@ -1,11 +1,11 @@
-from typing import Dict, List, Optional, Callable, Tuple, Union
+# estimator.py
+from typing import Dict, List, Optional
 import torch
-from transformers import PreTrainedModel, PreTrainedTokenizer, LogitsProcessor, LogitsProcessorList
+from transformers import PreTrainedTokenizer, LogitsProcessor
 from .models import UncertaintyAnalysisRequest, TokenInfo, UncertaintyMetrics
 from .core.analyzer import EntropyAnalyzer
 
 class UncertaintyLogitsProcessor(LogitsProcessor):
-    """Captures logits during generation for uncertainty analysis"""
     def __init__(self, estimator):
         self.captured_logits = []
         self.estimator = estimator
@@ -24,11 +24,9 @@ class UncertaintyEstimator:
         self.top_k = top_k
 
     def get_logits_processor(self) -> LogitsProcessor:
-        """Returns a logits processor that can be included in the user's generation pipeline"""
         return UncertaintyLogitsProcessor(self)
 
     def _process_logits(self, logits: torch.Tensor, tokenizer: PreTrainedTokenizer) -> List[TokenInfo]:
-        """Process logits to get token information"""
         probs = torch.softmax(logits, dim=-1)
         top_probs, top_indices = torch.topk(probs[0], self.top_k)
         top_logits = logits[0][top_indices]
@@ -50,7 +48,6 @@ class UncertaintyEstimator:
         tokenizer: PreTrainedTokenizer,
         processor: UncertaintyLogitsProcessor
     ) -> List[UncertaintyMetrics]:
-        """Analyze uncertainty from a generation that used our logits processor"""
         generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
         
         uncertainty_metrics = []
@@ -60,7 +57,7 @@ class UncertaintyEstimator:
             request = UncertaintyAnalysisRequest(
                 logits=logits[0].tolist(),
                 prompt=generated_text[:step],
-                model_id="user_model",  # User can pass this if needed
+                model_id="user_model",
                 token_info=token_info,
                 metadata={
                     'step': step,

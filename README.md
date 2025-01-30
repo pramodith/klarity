@@ -54,6 +54,10 @@ response = estimator.estimate(
     tokenizer
 )
 
+When the model is consistently uncertain (Sustained Score)
+What the model is uncertain about (Decision Ratio)
+How "lost" the model is (Coherence Score)
+
 # Access structured insights
 print(f"Semantic Entropy: {response.metrics.semantic_entropy:.4f}")
 print(f"Cluster Quality: {response.metrics.cluster_quality:.4f}")
