@@ -23,7 +23,7 @@ Klarity is a tool for analyzing uncertainty in generative model outputs. It comb
 <div align="center">
   <br>
 
-  <img src="assets/example.png" alt="example" width="400"/>
+  <img src="assets/example.png" alt="example" width="800"/>
   
   <br>
 
