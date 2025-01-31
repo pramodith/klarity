@@ -75,7 +75,7 @@ result = estimator.analyze_generation(
 )
 ```
 
-### Klara Labs API
+## 🦉 Klara Labs API
 
 For users seeking more powerful insight generation without managing infrastructure, we offer a hosted API solution:
 
