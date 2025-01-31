@@ -1,3 +1,4 @@
+#basic_usage.py
 from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorList
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
