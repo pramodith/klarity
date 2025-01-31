@@ -1,5 +1,5 @@
 # analyzer.py
-from typing import List, Dict
+from typing import Any, List, Dict, Optional
 import numpy as np
 from scipy.stats import entropy
 from sentence_transformers import SentenceTransformer
@@ -8,9 +8,42 @@ from collections import defaultdict
 from ..models import TokenInfo, UncertaintyAnalysisRequest, UncertaintyMetrics
 
 class EntropyAnalyzer:
-    def __init__(self, min_token_prob: float = 0.01):
+    def __init__(
+        self, 
+        min_token_prob: float = 0.01,
+        insight_model: Optional[Any] = None,
+        insight_tokenizer: Optional[Any] = None,
+        insight_prompt_template: Optional[str] = None
+    ):
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         self.min_token_prob = min_token_prob
+        self.insight_model = insight_model
+        self.insight_tokenizer = insight_tokenizer
+        self.insight_prompt_template = insight_prompt_template or """Analyze step-by-step metrics:
+
+{detailed_metrics}
+
+Provide analysis:
+
+1. HIGH/LOW POINTS
+- Steps with highest entropy (>0.6)
+- Steps with lowest entropy (<0.2)
+
+2. KEY DECISIONS
+- Most uncertain choices (steps & options)
+- Most certain predictions (>0.9)
+
+3. ENTROPY COMPARISON
+- Raw vs semantic patterns
+- Notable divergences
+
+4. RELIABILITY
+- Major uncertainty areas
+- Potential issues
+
+Reference specific steps and values.
+
+Analysis:"""
 
     def analyze(self, request: UncertaintyAnalysisRequest) -> UncertaintyMetrics:
         # Calculate raw entropy
@@ -20,11 +53,16 @@ class EntropyAnalyzer:
         # Calculate semantic entropy based on token predictions
         semantic_entropy = self._calculate_semantic_entropy(request.token_info)
         
-        return UncertaintyMetrics(
+        metrics = UncertaintyMetrics(
             raw_entropy=float(raw_entropy),
             semantic_entropy=float(semantic_entropy),
             token_predictions=request.token_info
         )
+
+        if self.insight_model and self.insight_tokenizer:
+            metrics.insight = self.generate_overall_insight(metrics)
+        
+        return metrics
 
     def _calculate_raw_entropy(self, probabilities: np.ndarray) -> float:
         """Calculate raw entropy of probability distribution"""
@@ -92,3 +130,40 @@ class EntropyAnalyzer:
                 group_probs[gid] /= total_prob
                 
         return group_probs
+    
+    def generate_overall_insight(self, metrics_list: List[UncertaintyMetrics]) -> Optional[str]:
+        if not self.insight_model or not self.insight_tokenizer:
+            return None
+
+        # Build detailed metrics string
+        detailed_metrics = []
+        for idx, metrics in enumerate(metrics_list):
+            top_predictions = [
+                f"{t.token} ({t.probability:.3f})"
+                for t in metrics.token_predictions[:3]
+            ]
+            
+            step_metrics = (
+                f"Step {idx}:\n"
+                f"- Raw Entropy: {metrics.raw_entropy:.4f}\n"
+                f"- Semantic Entropy: {metrics.semantic_entropy:.4f}\n"
+                f"- Top 3 Predictions: {' | '.join(top_predictions)}"
+            )
+            detailed_metrics.append(step_metrics)
+
+        # Combine all metrics with proper spacing
+        all_metrics = "\n\n".join(detailed_metrics)
+
+        # Generate prompt with detailed metrics
+        prompt = self.insight_prompt_template.format(detailed_metrics=all_metrics)
+
+        # Generate insight
+        inputs = self.insight_tokenizer(prompt, return_tensors="pt").to(self.insight_model.device)
+        outputs = self.insight_model.generate(
+            inputs.input_ids,
+            max_new_tokens=300,
+            temperature=0.7,
+            top_p=0.9,
+            do_sample=True
+        )
+        return self.insight_tokenizer.decode(outputs[0], skip_special_tokens=True).split("Analysis:")[-1].strip()

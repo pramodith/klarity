@@ -1,8 +1,9 @@
 # estimator.py
 from typing import Dict, List, Optional
+import numpy as np
 import torch
 from transformers import PreTrainedTokenizer, LogitsProcessor
-from .models import UncertaintyAnalysisRequest, TokenInfo, UncertaintyMetrics
+from .models import UncertaintyAnalysisRequest, TokenInfo, UncertaintyMetrics, UncertaintyAnalysisResult
 from .core.analyzer import EntropyAnalyzer
 
 class UncertaintyLogitsProcessor(LogitsProcessor):
@@ -47,10 +48,11 @@ class UncertaintyEstimator:
         generation_output,
         tokenizer: PreTrainedTokenizer,
         processor: UncertaintyLogitsProcessor
-    ) -> List[UncertaintyMetrics]:
+    ) -> UncertaintyAnalysisResult:
         generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
         
-        uncertainty_metrics = []
+        # Collect all token metrics first
+        all_metrics = []
         for step, logits in enumerate(processor.captured_logits):
             token_info = self._process_logits(logits, tokenizer)
             
@@ -59,13 +61,23 @@ class UncertaintyEstimator:
                 prompt=generated_text[:step],
                 model_id="user_model",
                 token_info=token_info,
-                metadata={
-                    'step': step,
-                    'total_steps': len(processor.captured_logits)
-                }
+                metadata={'step': step}
             )
             
-            metrics = self.analyzer.analyze(request)
-            uncertainty_metrics.append(metrics)
+            # Create metrics without insight
+            metrics = UncertaintyMetrics(
+                raw_entropy=self.analyzer._calculate_raw_entropy(
+                    np.array([t.probability for t in token_info])
+                ),
+                semantic_entropy=self.analyzer._calculate_semantic_entropy(token_info),
+                token_predictions=token_info
+            )
+            all_metrics.append(metrics)
 
-        return uncertainty_metrics
+        # Generate single insight using all collected data
+        overall_insight = self.analyzer.generate_overall_insight(all_metrics)
+        
+        return UncertaintyAnalysisResult(
+            token_metrics=all_metrics,
+            overall_insight=overall_insight
+        )

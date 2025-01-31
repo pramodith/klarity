@@ -4,6 +4,7 @@ from .models import (
     TokenInfo,
     UncertaintyMetrics,
     UncertaintyAnalysisRequest,
+    UncertaintyAnalysisResult,
 )
 from transformers import LogitsProcessorList
 
@@ -12,7 +13,9 @@ __all__ = [
     'TokenInfo',
     'UncertaintyMetrics',
     'UncertaintyAnalysisRequest',
-    'LogitsProcessorList'
+    'LogitsProcessorList',
+    'UncertaintyAnalysisResult',
+
 ]
 
 __version__ = "0.1.0"

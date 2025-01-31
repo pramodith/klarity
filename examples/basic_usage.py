@@ -3,15 +3,24 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorLis
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
 
-# Initialize
+# Initialize your model
 model_name = "Qwen/Qwen2.5-0.5B"
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
+# Initialize your insight model
+insight_model_name = "Qwen/Qwen2.5-0.5B-Instruct"  # User can choose any model
+insight_model = AutoModelForCausalLM.from_pretrained(insight_model_name)
+insight_tokenizer = AutoTokenizer.from_pretrained(insight_model_name)
+
 # Create estimator
 estimator = UncertaintyEstimator(
     top_k=100,
-    analyzer=EntropyAnalyzer(min_token_prob=0.01)
+    analyzer=EntropyAnalyzer(
+        min_token_prob=0.01,
+        insight_model=insight_model,
+        insight_tokenizer=insight_tokenizer
+    )
 )
 uncertainty_processor = estimator.get_logits_processor()
 
@@ -31,7 +40,7 @@ generation_output = model.generate(
 )
 
 # Analyze the generation
-metrics_list = estimator.analyze_generation(
+result = estimator.analyze_generation(
     generation_output,
     tokenizer,
     uncertainty_processor
@@ -42,12 +51,15 @@ generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_t
 print(f"\nPrompt: {prompt}")
 print(f"Generated text: {generated_text}")
 
-# Print token-level metrics
-print("\nToken-level Analysis:")
-for i, metrics in enumerate(metrics_list):
-    print(f"\nToken {i}:")
+print("\nDetailed Token Analysis:")
+for idx, metrics in enumerate(result.token_metrics):
+    print(f"\nStep {idx}:")
     print(f"Raw entropy: {metrics.raw_entropy:.4f}")
     print(f"Semantic entropy: {metrics.semantic_entropy:.4f}")
     print("Top 3 predictions:")
-    for pred in metrics.token_predictions[:3]:
-        print(f"  {pred.token}: {pred.probability:.3f}")
+    for i, pred in enumerate(metrics.token_predictions[:3], 1):
+        print(f"  {i}. {pred.token} (prob: {pred.probability:.4f})")
+
+# Show comprehensive insight
+print("\nComprehensive Analysis:")
+print(result.overall_insight)
