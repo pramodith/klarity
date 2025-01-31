@@ -75,6 +75,17 @@ result = estimator.analyze_generation(
 )
 ```
 
+### Klara Labs API
+
+For users seeking more powerful insight generation without managing infrastructure, we offer a hosted API solution:
+
+- **Enhanced Models**: Access to state-of-the-art models optimized for explainability
+- **Higher Accuracy**: Improved semantic analysis and clustering
+- **Managed Infrastructure**: No need to handle model deployment and scaling
+- **Simple Integration**: RESTful API with comprehensive documentation
+
+Visit [klaralabs.com](https://klaralabs.com) to learn more about our API services and pricing.
+
 ## 📊 Analysis Metrics
 
 Klarity provides several key metrics for each generation step:
@@ -103,6 +114,7 @@ Planned support:
 | Framework | Status | Notes |
 |-----------|--------|--------|
 | Hugging Face | ✅ Supported | Requires Causal LM |
+| Klara Labs API | ✅ Supported | Enhanced accuracy & performance |
 
 ## 🔍 Advanced Features
 
@@ -153,5 +165,6 @@ MIT License. See [LICENSE](LICENSE) for more information.
 
 ## 📫 Community & Support
 
+- [Website](https://klaralabs.com)
 - [GitHub Issues](https://github.com/yourusername/klarity/issues) for bugs and features
 - [GitHub Discussions](https://github.com/yourusername/klarity/discussions) for questions
