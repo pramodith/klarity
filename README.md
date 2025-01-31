@@ -20,6 +20,15 @@ Klarity is a tool for analyzing uncertainty in generative model outputs. It comb
 - **AI-Powered Insights**: Uses a separate model to analyze generation patterns and provide human-readable insights
 - **Step-by-Step Analysis**: Tracks uncertainty metrics at each generation step
 
+<div align="center">
+  <br>
+
+  <img src="assets/example.png" alt="example" width="400"/>
+  
+  <br>
+
+</div>
+
 ## 🚀 Quick Start
 
 Install directly from GitHub:
@@ -84,7 +93,7 @@ For users seeking more powerful insight generation without managing infrastructu
 - **Managed Infrastructure**: No need to handle model deployment and scaling
 - **Simple Integration**: RESTful API with comprehensive documentation
 
-Visit [klaralabs.com](https://klaralabs.com) to learn more about our API services and pricing.
+Visit [klaralabs.com](https://klaralabs.com) to learn more about our platform.
 
 ## 📊 Analysis Metrics
 
@@ -114,7 +123,6 @@ Planned support:
 | Framework | Status | Notes |
 |-----------|--------|--------|
 | Hugging Face | ✅ Supported | Requires Causal LM |
-| Klara Labs API | ✅ Supported | Enhanced accuracy & performance |
 
 ## 🔍 Advanced Features
 
