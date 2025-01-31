@@ -1,3 +1,20 @@
+Metadata-Version: 2.2
+Name: klarity
+Version: 0.1.0
+Summary: Uncertainty estimation for open-source generative models
+Project-URL: Homepage, https://github.com/yourusername/klarity
+Project-URL: Issues, https://github.com/yourusername/klarity/issues
+Project-URL: Repository, https://github.com/yourusername/klarity.git
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: torch>=2.0.0
+Requires-Dist: transformers>=4.0.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: scikit-learn>=1.0.0
+Requires-Dist: sentence-transformers>=2.0.0
+Requires-Dist: numpy>=1.20.0
+
 # Klarity
 
 <div align="center">
