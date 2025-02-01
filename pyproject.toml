@@ -14,14 +14,15 @@ dependencies = [
     "pydantic>=2.0.0",
     "scikit-learn>=1.0.0",
     "sentence-transformers>=2.0.0",
-    "numpy>=1.20.0"
+    "numpy>=1.20.0",
+    "scipy>=1.0.0"  # Added since you're using scipy.stats
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/klarity"
-Issues = "https://github.com/yourusername/klarity/issues"
-Repository = "https://github.com/yourusername/klarity.git"
+Homepage = "https://github.com/klara-research/klarity"
+Issues = "https://github.com/klara-research/klarity/issues"
+Repository = "https://github.com/klara-research/klarity.git"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["klarity", "klarity.core"] 
+packages = ["klarity", "klarity.core"]
