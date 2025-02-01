@@ -23,5 +23,5 @@ Issues = "https://github.com/yourusername/klarity/issues"
 Repository = "https://github.com/yourusername/klarity.git"
 
 [tool.setuptools]
+package-dir = {"" = "src"}
 packages = ["klarity"]
-package-dir = {"" = "src"} 
