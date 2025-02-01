@@ -24,3 +24,4 @@ Repository = "https://github.com/yourusername/klarity.git"
 
 [tool.setuptools]
 packages = ["klarity"]
+package-dir = {"" = "src"} 
