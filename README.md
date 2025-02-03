@@ -154,7 +154,7 @@ Planned support:
 |-------|------|--------|--------|
 | Qwen2.5-0.5B | Base | ✅ Tested | Full Support |
 | Qwen2.5-0.5B-Instruct | Instruct | ✅ Tested | Full Support |
-| Qwen2.5-7B | Instruct | ✅ Tested | Full Support |
+| Qwen2.5-7B | Base | ✅ Tested | Full Support |
 | Qwen2.5-7B-Instruct | Instruct | ✅ Tested | Full Support |
 
 ## 🔍 Advanced Features
