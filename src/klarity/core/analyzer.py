@@ -25,23 +25,15 @@ class EntropyAnalyzer:
 
 Provide analysis:
 
-1. HIGH/LOW POINTS
-- Steps with highest entropy (>0.6)
-- Steps with lowest entropy (<0.2)
-
-2. KEY DECISIONS
+1. KEY DECISIONS
 - Most uncertain choices (steps & options)
 - Most certain predictions (>0.9)
 
-3. ENTROPY COMPARISON
-- Raw vs semantic patterns
-- Notable divergences
-
-4. RELIABILITY
+2. RELIABILITY
 - Major uncertainty areas
 - Potential issues
 
-Reference specific steps and values.
+Reference specific motivations and values.
 
 Analysis:"""
 

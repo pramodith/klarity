@@ -10,13 +10,13 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "torch>=2.0.0,<2.6.0",
-    "transformers==4.30.0",  # Downgraded to work with older huggingface-hub
-    "sentence-transformers==2.2.2",
-    "huggingface-hub>=0.14.1,<1.0",  # Match transformers requirement
-    "pydantic>=2.0.0",
+    "sentence-transformers>=2.2.2",
+    "transformers==4.26.0",  # Version compatible with sentence-transformers 2.2.2
+    "huggingface-hub==0.7.0",  # Last version with cached_download
     "scikit-learn>=1.0.0",
     "numpy>=1.20.0",
-    "scipy>=1.0.0"
+    "scipy>=1.0.0",
+    "pydantic>=2.0.0"
 ]
 
 [project.urls]
