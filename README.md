@@ -17,16 +17,13 @@ Klarity is a tool for analyzing uncertainty in generative model outputs. It comb
 
 - **Dual Entropy Analysis**: Combines raw probability entropy with semantic similarity-based entropy
 - **Semantic Clustering**: Groups similar predictions to understand model decision-making
-- **AI-Powered Insights**: Uses a separate model to analyze generation patterns and provide human-readable insights
-- **Step-by-Step Analysis**: Tracks uncertainty metrics at each generation step
+- **Structured Output**: Returns detailed JSON analysis of generation patterns
+- **AI-powered Analysis**: Uses a separate model to analyze generation patterns and provide human-readable insights
 
 <div align="center">
   <br>
-
   <img src="assets/example.png" alt="example" width="800"/>
-  
   <br>
-
 </div>
 
 ## 🚀 Quick Start
@@ -42,13 +39,15 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorLis
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
 
-# Initialize models
-model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
-tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
+# Initialize your model
+model_name = "Qwen/Qwen2.5-7B"
+model = AutoModelForCausalLM.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-# Initialize insight model
-insight_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
-insight_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
+# Initialize your insight model
+insight_model_name = "Qwen/Qwen2.5-7B-Instruct"  # You can choose any model
+insight_model = AutoModelForCausalLM.from_pretrained(insight_model_name)
+insight_tokenizer = AutoTokenizer.from_pretrained(insight_model_name)
 
 # Create estimator
 estimator = UncertaintyEstimator(
@@ -59,13 +58,13 @@ estimator = UncertaintyEstimator(
         insight_tokenizer=insight_tokenizer
     )
 )
-
-# Set up generation with uncertainty analysis
 uncertainty_processor = estimator.get_logits_processor()
-prompt = "What is the capital of Italy?"
 
-# Generate with analysis
+# Set up generation
+prompt = "Your prompt"
 inputs = tokenizer(prompt, return_tensors="pt")
+
+# Generate with uncertainty analysis
 generation_output = model.generate(
     **inputs,
     max_new_tokens=20,
@@ -76,33 +75,70 @@ generation_output = model.generate(
     output_scores=True,
 )
 
-# Get analysis results
+# Analyze the generation
 result = estimator.analyze_generation(
     generation_output,
     tokenizer,
     uncertainty_processor
 )
+
+generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
+
+# Inspect results
+print(f"\nPrompt: {prompt}")
+print(f"Generated text: {generated_text}")
+
+print("\nDetailed Token Analysis:")
+for idx, metrics in enumerate(result.token_metrics):
+    print(f"\nStep {idx}:")
+    print(f"Raw entropy: {metrics.raw_entropy:.4f}")
+    print(f"Semantic entropy: {metrics.semantic_entropy:.4f}")
+    print("Top 3 predictions:")
+    for i, pred in enumerate(metrics.token_predictions[:3], 1):
+        print(f"  {i}. {pred.token} (prob: {pred.probability:.4f})")
+
+# Show comprehensive insight
+print("\nComprehensive Analysis:")
+print(result.overall_insight)
 ```
 
-## 🦉 Klara Labs API
+## 📊 Analysis Output
 
-For users seeking more powerful insight generation without managing infrastructure, we offer a hosted API solution:
+Klarity provides a structured JSON analysis for each generation, the insight quality depends on the model that you choose.
 
-- **Enhanced Models**: Access to state-of-the-art models optimized for explainability
-- **Higher Accuracy**: Improved semantic analysis and clustering
-- **Managed Infrastructure**: No need to handle model deployment and scaling
-- **Simple Integration**: RESTful API with comprehensive documentation
-
-Visit [klaralabs.com](https://klaralabs.com) to learn more about our platform.
-
-## 📊 Analysis Metrics
-
-Klarity provides several key metrics for each generation step:
-
-- **Raw Entropy**: Traditional entropy based on token probabilities
-- **Semantic Entropy**: Entropy calculated over semantically similar token groups
-- **Token Predictions**: Detailed probability distribution of top predicted tokens
-- **Overall Insight**: AI-generated explaination of uncertainty patterns
+```python
+{
+    "uncertainty_points": [
+        {
+            "step": int,          # Generation step number
+            "entropy": float,     # Entropy value at this step
+            "options": string[],  # Top competing options
+            "type": string       # Type of uncertainty
+        }
+    ],
+    "high_confidence": [
+        {
+            "step": int,          # Generation step number
+            "probability": float, # Token probability
+            "token": string,     # Chosen token
+            "context": string    # Contextual information
+        }
+    ],
+    "risk_areas": [
+        {
+            "type": string,      # Type of risk identified
+            "steps": int[],      # Affected steps
+            "reasoning": string  # Explanation of the risk
+        }
+    ],
+    "suggestions": [
+        {
+            "issue": string,     # Identified issue
+            "improvement": string # Suggested improvement
+        }
+    ]
+}
+```
 
 ## 🤖 Supported Frameworks & Models
 
@@ -118,40 +154,17 @@ Planned support:
 |-------|------|--------|--------|
 | Qwen2.5-0.5B | Base | ✅ Tested | Full Support |
 | Qwen2.5-0.5B-Instruct | Instruct | ✅ Tested | Full Support |
-
-### Insight Models
-| Framework | Status | Notes |
-|-----------|--------|--------|
-| Hugging Face | ✅ Supported | Requires Causal LM |
+| Qwen2.5-7B | Instruct | ✅ Tested | Full Support |
+| Qwen2.5-7B-Instruct | Instruct | ✅ Tested | Full Support |
 
 ## 🔍 Advanced Features
 
-### Custom Insight Templates
-You can customize the insight generation prompt:
-```python
-custom_template = """
-Analyze metrics:
-{detailed_metrics}
-
-Provide insights on:
-1. Uncertainty patterns
-2. Decision points
-3. Recommendations
-
-Analysis:
-"""
-
-analyzer = EntropyAnalyzer(
-    insight_prompt_template=custom_template,
-    insight_model=model,
-    insight_tokenizer=tokenizer
-)
-```
-
-### Semantic Analysis Configuration
+### Custom Analysis Configuration
+You can customize the analysis parameters:
 ```python
 analyzer = EntropyAnalyzer(
     min_token_prob=0.01,  # Minimum probability threshold
+    semantic_similarity_threshold=0.8  # Threshold for semantic grouping
 )
 ```
 
@@ -162,7 +175,7 @@ Contributions are welcome! Areas we're looking to improve:
 - Additional framework support
 - More tested models
 - Enhanced semantic analysis
-- Improved insight generation
+- Additional analysis metrics
 - Documentation and examples
 
 Please see our [Contributing Guide](CONTRIBUTING.md) for details.
@@ -174,5 +187,5 @@ MIT License. See [LICENSE](LICENSE) for more information.
 ## 📫 Community & Support
 
 - [Website](https://klaralabs.com)
-- [GitHub Issues](https://github.com/yourusername/klarity/issues) for bugs and features
-- [GitHub Discussions](https://github.com/yourusername/klarity/discussions) for questions
+- [GitHub Issues](https://github.com/klara-research/klarity/issues) for bugs and features
+- [GitHub Discussions](https://github.com/klara-research/klarity/discussions) for questions

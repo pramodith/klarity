@@ -23,17 +23,11 @@ class EntropyAnalyzer:
 
 {detailed_metrics}
 
-Provide analysis:
-
-1. KEY DECISIONS
-- Most uncertain choices (steps & options)
-- Most certain predictions (>0.9)
-
-2. RELIABILITY
-- Major uncertainty areas
-- Potential issues
-
-Reference specific motivations and values.
+Return a JSON analysis with:
+- uncertainty_points: array of {step, entropy, options[], type}
+- high_confidence: array of {step, probability, token, context}
+- risk_areas: array of {type, steps[], motivation}
+- suggestions: array of {issue, improvement}
 
 Analysis:"""
 
@@ -153,7 +147,7 @@ Analysis:"""
         inputs = self.insight_tokenizer(prompt, return_tensors="pt").to(self.insight_model.device)
         outputs = self.insight_model.generate(
             inputs.input_ids,
-            max_new_tokens=300,
+            max_new_tokens=400,
             temperature=0.7,
             top_p=0.9,
             do_sample=True
