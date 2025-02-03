@@ -23,7 +23,7 @@ class EntropyAnalyzer:
 
 {detailed_metrics}
 
-Return a JSON analysis with:
+Return only a valid JSON with:
 - uncertainty_points: array of {step, entropy, options[], type}
 - high_confidence: array of {step, probability, token, context}
 - risk_areas: array of {type, steps[], motivation}

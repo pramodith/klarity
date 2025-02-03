@@ -4,12 +4,12 @@ from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
 
 # Initialize your model
-model_name = "Qwen/Qwen2.5-0.5B"
+model_name = "Qwen/Qwen2.5-7B-Instruct"
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 # Initialize your insight model
-insight_model_name = "Qwen/Qwen2.5-0.5B-Instruct"  # User can choose any model
+insight_model_name = "Qwen/Qwen2.5-7B-Instruct"  # User can choose any model
 insight_model = AutoModelForCausalLM.from_pretrained(insight_model_name)
 insight_tokenizer = AutoTokenizer.from_pretrained(insight_model_name)
 

@@ -157,6 +157,17 @@ Planned support:
 | Qwen2.5-7B | Base | ✅ Tested | Full Support |
 | Qwen2.5-7B-Instruct | Instruct | ✅ Tested | Full Support |
 
+### Analysis Models
+| Model | Type | Status | JSON Reliability | Notes |
+|-------|------|--------|-----------------|--------|
+| Qwen2.5-0.5B-Instruct | Instruct | ✅ Tested | ⚡ Low | Consistently output unstructured analysis instead of JSON. Best used with structured prompting and validation. |
+| Qwen2.5-7B-Instruct | Instruct | ✅ Tested | ✅ High | Consistently outputs well-formed JSON analysis. Recommended for production use. |
+
+### JSON Output Reliability Guide:
+- ✅ High: Consistently outputs valid JSON (>80% of responses)
+- ⚠️ Moderate: Usually outputs valid JSON (50-80% of responses)
+- ⚡ Low: Inconsistent JSON output (<50% of responses)
+
 ## 🔍 Advanced Features
 
 ### Custom Analysis Configuration
