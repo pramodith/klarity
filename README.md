@@ -149,7 +149,7 @@ Currently supported:
 Planned support:
 - ⏳ PyTorch
 
-### Tested Models
+### Tested Target Models
 | Model | Type | Status | Notes |
 |-------|------|--------|--------|
 | Qwen2.5-0.5B | Base | ✅ Tested | Full Support |
@@ -193,7 +193,7 @@ Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## 📝 License
 
-MIT License. See [LICENSE](LICENSE) for more information.
+Apache 2.0 License. See [LICENSE](LICENSE) for more information.
 
 ## 📫 Community & Support
 
