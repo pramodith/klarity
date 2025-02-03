@@ -10,10 +10,11 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "torch>=2.0.0,<2.6.0",
-    "transformers==4.31.0",  # This version is known to be stable
+    "transformers==4.31.0",
+    "huggingface-hub<0.8.0",  # Added to fix cached_download error
     "pydantic>=2.0.0",
     "scikit-learn>=1.0.0",
-    "sentence-transformers>=2.0.0",
+    "sentence-transformers==2.2.2",  # Pinned to a specific version for stability
     "numpy>=1.20.0",
     "scipy>=1.0.0"
 ]

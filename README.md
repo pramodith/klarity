@@ -33,7 +33,7 @@ Klarity is a tool for analyzing uncertainty in generative model outputs. It comb
 
 Install directly from GitHub:
 ```bash
-pip install git+https://github.com/klaralabs/klarity.git
+pip install git+https://github.com/klara-research/klarity.git
 ```
 
 Basic usage example:
