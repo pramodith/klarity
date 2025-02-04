@@ -11,7 +11,9 @@
   _Understanding uncertainty in generative model predictions_
   <br>
   <br>
-  <img src="assets/discord.png" alt="Join our Discord" width="150"/>
+  <a href="https://discord.gg/wCnTRzBE">
+    <img src="assets/discord.png" alt="Join our Discord" width="150"/>
+  </a>
 </div>
 
 ## 🎯 Overview
@@ -201,6 +203,6 @@ Apache 2.0 License. See [LICENSE](LICENSE) for more information.
 ## 📫 Community & Support
 
 - [Website](https://klaralabs.com)
-- [Discord Community](https://github.com/klara-research/klarity/issues) for discussions & chatting
+- [Discord Community](https://discord.gg/wCnTRzBE) for discussions & chatting
 - [GitHub Issues](https://github.com/klara-research/klarity/issues) for bugs and features
 
