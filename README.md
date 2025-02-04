@@ -204,6 +204,3 @@ Apache 2.0 License. See [LICENSE](LICENSE) for more information.
 - [Discord Community](https://github.com/klara-research/klarity/issues) for discussions & chatting
 - [GitHub Issues](https://github.com/klara-research/klarity/issues) for bugs and features
 
-
-## ⭐ Stargazers over time
-[![Stargazers over time](https://starchart.cc/klara-research/klarity.svg?variant=adaptive)](https://starchart.cc/klara-research/klarity)
