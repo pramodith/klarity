@@ -9,6 +9,8 @@
   # Klarity 
 
   _Understanding uncertainty in generative model predictions_
+  <br>
+  <img src="assets/discord.png" alt="Join our Discord" width="100"/>
 </div>
 
 ## 🎯 Overview
@@ -198,5 +200,13 @@ Apache 2.0 License. See [LICENSE](LICENSE) for more information.
 ## 📫 Community & Support
 
 - [Website](https://klaralabs.com)
+- [Discord Community](https://github.com/klara-research/klarity/issues) for discussions & chatting
 - [GitHub Issues](https://github.com/klara-research/klarity/issues) for bugs and features
-- [GitHub Discussions](https://github.com/klara-research/klarity/discussions) for questions
+
+
+## ⭐ Stargazers over time
+[![Stargazers over time](https://starchart.cc/klara-research/klarity.svg?variant=adaptive)](https://starchart.cc/klara-research/klarity)
+
+
+
+https://discord.gg/wCnTRzBE
