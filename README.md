@@ -10,7 +10,8 @@
 
   _Understanding uncertainty in generative model predictions_
   <br>
-  <img src="assets/discord.png" alt="Join our Discord" width="100"/>
+  <br>
+  <img src="assets/discord.png" alt="Join our Discord" width="150"/>
 </div>
 
 ## 🎯 Overview
@@ -206,7 +207,3 @@ Apache 2.0 License. See [LICENSE](LICENSE) for more information.
 
 ## ⭐ Stargazers over time
 [![Stargazers over time](https://starchart.cc/klara-research/klarity.svg?variant=adaptive)](https://starchart.cc/klara-research/klarity)
-
-
-
-https://discord.gg/wCnTRzBE
