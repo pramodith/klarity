@@ -173,6 +173,7 @@ Planned support:
 | Qwen2.5-0.5B-Instruct | Instruct | ✅ Tested | Full Support |
 | Qwen2.5-7B | Base | ✅ Tested | Full Support |
 | Qwen2.5-7B-Instruct | Instruct | ✅ Tested | Full Support |
+| Llama-3.2-3B-Instruct | Instruct | ✅ Tested | - |
 
 ### Analysis Models
 | Model | Type | Status | JSON Reliability | Notes |
