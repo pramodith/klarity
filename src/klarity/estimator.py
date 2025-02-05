@@ -75,7 +75,11 @@ class UncertaintyEstimator:
             all_metrics.append(metrics)
 
         # Generate single insight using all collected data
-        overall_insight = self.analyzer.generate_overall_insight(all_metrics)
+        overall_insight = self.analyzer.generate_overall_insight(
+            all_metrics,
+            input_query=generated_text[:step],  # or however you want to get the input query
+            generated_text=generated_text  # the full generated text
+        )
         
         return UncertaintyAnalysisResult(
             token_metrics=all_metrics,

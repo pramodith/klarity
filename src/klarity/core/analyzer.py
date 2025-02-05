@@ -1,5 +1,6 @@
 # analyzer.py
 from typing import Any, List, Dict, Optional
+from klarity.core.together_wrapper import TogetherModelWrapper
 import numpy as np
 from scipy.stats import entropy
 from sentence_transformers import SentenceTransformer
@@ -13,42 +14,67 @@ class EntropyAnalyzer:
         min_token_prob: float = 0.01,
         insight_model: Optional[Any] = None,
         insight_tokenizer: Optional[Any] = None,
+        insight_api_key: Optional[str] = None,
         insight_prompt_template: Optional[str] = None
     ):
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         self.min_token_prob = min_token_prob
-        self.insight_model = insight_model
-        self.insight_tokenizer = insight_tokenizer
-        self.insight_prompt_template = insight_prompt_template or """Analyze step-by-step metrics:
+        
+        # Initialize Together AI model if specified
+        self.together_model = None
+        self.insight_model = None
+        self.insight_tokenizer = None
+        
+        if isinstance(insight_model, str) and insight_model.startswith("together:"):
+            model_name = insight_model.replace("together:", "")
+            self.together_model = TogetherModelWrapper(
+                model_name=model_name,
+                api_key=insight_api_key
+            )
+        else:
+            self.insight_model = insight_model
+            self.insight_tokenizer = insight_tokenizer
+            
+        self.insight_prompt_template = insight_prompt_template or """Analyze the uncertainty in this generation:
 
+INPUT QUERY: {input_query}
+GENERATED TEXT: {generated_text}
+
+UNCERTAINTY METRICS:
 {detailed_metrics}
 
-Return only a valid JSON with:
-- uncertainty_points: array of {step, entropy, options[], type}
-- high_confidence: array of {step, probability, token, context}
-- risk_areas: array of {type, steps[], motivation}
-- suggestions: array of {issue, improvement}
+Return a concise JSON analysis with uncertainty scores (0-100):
+{{
+    "scores": {{
+        "overall_uncertainty": "<0-1>",
+        "confidence_score": "<0-1>",
+        "hallucination_risk": "<0-1>"
+    }},
+    "uncertainty_analysis": {{
+        "high_uncertainty_parts": [
+            {{
+                "text": "<specific_text>",
+                "why": "<brief_reason_for_uncertainty>"
+            }}
+        ],
+        "main_issues": [
+            {{
+                "issue": "<specific_problem>",
+                "evidence": "<brief_evidence>"
+            }}
+        ],
+        "key_suggestions": [
+            {{
+                "what": "<specific_improvement>",
+                "how": "<brief_implementation>"
+            }}
+        ]
+    }}
+}}
+
+Be concise. Focus on specific content, not abstract metrics.
 
 Analysis:"""
-
-    def analyze(self, request: UncertaintyAnalysisRequest) -> UncertaintyMetrics:
-        # Calculate raw entropy
-        probabilities = np.array([t.probability for t in request.token_info])
-        raw_entropy = self._calculate_raw_entropy(probabilities)
-        
-        # Calculate semantic entropy based on token predictions
-        semantic_entropy = self._calculate_semantic_entropy(request.token_info)
-        
-        metrics = UncertaintyMetrics(
-            raw_entropy=float(raw_entropy),
-            semantic_entropy=float(semantic_entropy),
-            token_predictions=request.token_info
-        )
-
-        if self.insight_model and self.insight_tokenizer:
-            metrics.insight = self.generate_overall_insight(metrics)
-        
-        return metrics
 
     def _calculate_raw_entropy(self, probabilities: np.ndarray) -> float:
         """Calculate raw entropy of probability distribution"""
@@ -61,20 +87,12 @@ Analysis:"""
         if len(token_info) < 2:
             return 0.0
             
-        # Get embeddings for all predicted tokens
         tokens = [t.token for t in token_info]
         embeddings = self.embedding_model.encode(tokens)
-        
-        # Calculate similarity matrix
         similarity_matrix = cosine_similarity(embeddings)
-        
-        # Group similar tokens
         semantic_groups = self._group_similar_tokens(similarity_matrix, token_info)
-        
-        # Calculate probability mass for each semantic group
         group_probs = self._calculate_group_probabilities(semantic_groups, token_info)
         
-        # Calculate entropy over semantic groups
         if len(group_probs) > 1:
             return entropy(list(group_probs.values())) / np.log(len(group_probs))
         return 0.0
@@ -110,18 +128,23 @@ Analysis:"""
             group_probs[gid] = group_prob
             total_prob += group_prob
             
-        # Normalize probabilities
         if total_prob > 0:
             for gid in group_probs:
                 group_probs[gid] /= total_prob
                 
         return group_probs
-    
-    def generate_overall_insight(self, metrics_list: List[UncertaintyMetrics]) -> Optional[str]:
-        if not self.insight_model or not self.insight_tokenizer:
+
+    def generate_overall_insight(
+            self, 
+            metrics_list: List[UncertaintyMetrics],
+            input_query: Optional[str] = "",
+            generated_text: Optional[str] = ""
+        ) -> Optional[str]:
+        """Generate overall insight for all collected metrics"""
+        if not self.together_model and not (self.insight_model and self.insight_tokenizer):
             return None
 
-        # Build detailed metrics string
+        # Format metrics for the prompt
         detailed_metrics = []
         for idx, metrics in enumerate(metrics_list):
             top_predictions = [
@@ -137,13 +160,17 @@ Analysis:"""
             )
             detailed_metrics.append(step_metrics)
 
-        # Combine all metrics with proper spacing
         all_metrics = "\n\n".join(detailed_metrics)
+        prompt = self.insight_prompt_template.format(
+            detailed_metrics=all_metrics,
+            input_query=input_query,
+            generated_text=generated_text
+        )
 
-        # Generate prompt with detailed metrics
-        prompt = self.insight_prompt_template.format(detailed_metrics=all_metrics)
-
-        # Generate insight
+        if self.together_model:
+            return self.together_model.generate_insight(prompt)
+            
+        # Use original model
         inputs = self.insight_tokenizer(prompt, return_tensors="pt").to(self.insight_model.device)
         outputs = self.insight_model.generate(
             inputs.input_ids,
@@ -153,3 +180,17 @@ Analysis:"""
             do_sample=True
         )
         return self.insight_tokenizer.decode(outputs[0], skip_special_tokens=True).split("Analysis:")[-1].strip()
+
+    def analyze(self, request: UncertaintyAnalysisRequest) -> UncertaintyMetrics:
+        """Analyze uncertainty for a single generation step"""
+        probabilities = np.array([t.probability for t in request.token_info])
+        raw_entropy = self._calculate_raw_entropy(probabilities)
+        semantic_entropy = self._calculate_semantic_entropy(request.token_info)
+        
+        metrics = UncertaintyMetrics(
+            raw_entropy=float(raw_entropy),
+            semantic_entropy=float(semantic_entropy),
+            token_predictions=request.token_info
+        )
+
+        return metrics

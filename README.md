@@ -8,7 +8,7 @@
 
   # Klarity 
 
-  _Understanding uncertainty in generative model predictions_
+  _Understand & fix uncertainty in generative model predictions_
   <br>
   <br>
   <a href="https://discord.gg/wCnTRzBE">
@@ -49,20 +49,28 @@ model_name = "Qwen/Qwen2.5-7B"
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-# Initialize your insight model
-insight_model_name = "Qwen/Qwen2.5-7B-Instruct"  # You can choose any model
-insight_model = AutoModelForCausalLM.from_pretrained(insight_model_name)
-insight_tokenizer = AutoTokenizer.from_pretrained(insight_model_name)
-
 # Create estimator
+
+# Option 1: Using Together AI
 estimator = UncertaintyEstimator(
     top_k=100,
     analyzer=EntropyAnalyzer(
         min_token_prob=0.01,
-        insight_model=insight_model,
-        insight_tokenizer=insight_tokenizer
+        insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        insight_api_key="your_api_key"
     )
 )
+
+# Option 2: Using HuggingFace (original way)
+estimator = UncertaintyEstimator(
+    top_k=100,
+    analyzer=EntropyAnalyzer(
+        min_token_prob=0.01,
+        insight_model=model,
+        insight_tokenizer=tokenizer
+    )
+)
+
 uncertainty_processor = estimator.get_logits_processor()
 
 # Set up generation
@@ -111,37 +119,33 @@ print(result.overall_insight)
 
 Klarity provides a structured JSON analysis for each generation, the insight quality depends on the model that you choose.
 
-```python
+```json
 {
-    "uncertainty_points": [
-        {
-            "step": int,          # Generation step number
-            "entropy": float,     # Entropy value at this step
-            "options": string[],  # Top competing options
-            "type": string       # Type of uncertainty
-        }
-    ],
-    "high_confidence": [
-        {
-            "step": int,          # Generation step number
-            "probability": float, # Token probability
-            "token": string,     # Chosen token
-            "context": string    # Contextual information
-        }
-    ],
-    "risk_areas": [
-        {
-            "type": string,      # Type of risk identified
-            "steps": int[],      # Affected steps
-            "reasoning": string  # Explanation of the risk
-        }
-    ],
-    "suggestions": [
-        {
-            "issue": string,     # Identified issue
-            "improvement": string # Suggested improvement
-        }
-    ]
+    "scores": {
+        "overall_uncertainty": "<0-1>",  
+        "confidence_score": "<0-1>",     
+        "hallucination_risk": "<0-1>"    
+    },
+    "uncertainty_analysis": {
+        "high_uncertainty_parts": [
+            {
+                "text": "",
+                "why": ""
+            }
+        ],
+        "main_issues": [
+            {
+                "issue": "",
+                "evidence": ""
+            }
+        ],
+        "key_suggestions": [
+            {
+                "what": "",
+                "how": ""
+            }
+        ]
+    }
 }
 ```
 
@@ -150,6 +154,14 @@ Klarity provides a structured JSON analysis for each generation, the insight qua
 ### Model Frameworks
 Currently supported:
 - ✅ Hugging Face Transformers
+
+Planned support:
+- ⏳ PyTorch
+
+### Analysis Model (for the insights) Frameworks
+Currently supported:
+- ✅ Hugging Face Transformers
+- ✅ Together AI API
 
 Planned support:
 - ⏳ PyTorch
@@ -166,7 +178,8 @@ Planned support:
 | Model | Type | Status | JSON Reliability | Notes |
 |-------|------|--------|-----------------|--------|
 | Qwen2.5-0.5B-Instruct | Instruct | ✅ Tested | ⚡ Low | Consistently output unstructured analysis instead of JSON. Best used with structured prompting and validation. |
-| Qwen2.5-7B-Instruct | Instruct | ✅ Tested | ✅ High | Consistently outputs well-formed JSON analysis. Recommended for production use. |
+| Qwen2.5-7B-Instruct | Instruct | ✅ Tested | ⚠️ Moderate | Sometimes outputs well-formed JSON analysis. |
+| Llama-3.3-70B-Instruct-Turbo | Instruct | ✅ Tested | ✅ High | Reliably outputs well-formed JSON analysis. Not recommended for production use. |
 
 ### JSON Output Reliability Guide:
 - ✅ High: Consistently outputs valid JSON (>80% of responses)

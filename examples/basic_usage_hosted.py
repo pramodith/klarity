@@ -8,18 +8,15 @@ model_name = "Qwen/Qwen2.5-0.5B-Instruct"
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-# Initialize your insight self-hosted model 
-insight_model_name = "Qwen/Qwen2.5-0.5B-Instruct"  # User can choose togetherAI hosted ones
-insight_model = AutoModelForCausalLM.from_pretrained(insight_model_name)
-insight_tokenizer = AutoTokenizer.from_pretrained(insight_model_name)
-
-# Create estimator with your self-hosted model
+# Create estimator with togetherai hosted model
 estimator = UncertaintyEstimator(
-        top_k=100,
-        analyzer = EntropyAnalyzer(
-        insight_model=insight_model_name,
-        insight_tokenizer=insight_model_name
+    top_k=100,
+    analyzer=EntropyAnalyzer(
+        min_token_prob=0.01,
+        insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        insight_api_key="your_api_key"
     )
+
 )
 uncertainty_processor = estimator.get_logits_processor()
 
