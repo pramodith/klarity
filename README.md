@@ -142,11 +142,10 @@ Klarity provides a structured JSON analysis for each generation, the insight qua
 ### Model Frameworks
 Currently supported:
 - ✅ Hugging Face Transformers
-Full uncertainty analysis with raw and semantic entropy metrics
+-> Full uncertainty analysis with raw and semantic entropy metrics
 
 - ✅ Together AI
-Uncertainty analysis with raw log prob. metrics
-Token-level probability tracking
+-> Uncertainty analysis with raw log prob. metrics
 
 Planned support:
 - ⏳ PyTorch
