@@ -1,3 +1,4 @@
+#together_wrapper.py
 from typing import List, Optional
 from together import Together
 from ..models import TokenInfo, UncertaintyMetrics
@@ -7,7 +8,7 @@ class TogetherModelWrapper:
     def __init__(self, model_name: str, api_key: Optional[str] = None):
         self.client = Together(api_key=api_key)
         self.model_name = model_name
-        
+
     def generate_insight(self, prompt: str) -> str:
         """Generate insight using Together AI model"""
         response = self.client.chat.completions.create(

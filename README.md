@@ -31,7 +31,7 @@ Klarity is a tool for analyzing uncertainty in generative model outputs. It comb
   <br>
 </div>
 
-## 🚀 Quick Start
+## 🚀 Quick Start Hugging Face
 
 Install directly from GitHub:
 ```bash
@@ -50,18 +50,6 @@ model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 # Create estimator
-
-# Option 1: Using Together AI
-estimator = UncertaintyEstimator(
-    top_k=100,
-    analyzer=EntropyAnalyzer(
-        min_token_prob=0.01,
-        insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        insight_api_key="your_api_key"
-    )
-)
-
-# Option 2: Using HuggingFace (original way)
 estimator = UncertaintyEstimator(
     top_k=100,
     analyzer=EntropyAnalyzer(
@@ -154,6 +142,11 @@ Klarity provides a structured JSON analysis for each generation, the insight qua
 ### Model Frameworks
 Currently supported:
 - ✅ Hugging Face Transformers
+Full uncertainty analysis with raw and semantic entropy metrics
+
+- ✅ Together AI
+Uncertainty analysis with raw log prob. metrics
+Token-level probability tracking
 
 Planned support:
 - ⏳ PyTorch
