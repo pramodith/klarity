@@ -14,7 +14,7 @@ estimator = UncertaintyEstimator(
     analyzer=EntropyAnalyzer(
         min_token_prob=0.01,
         insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        insight_api_key="4337a7354ccf91fd696ca73f218b55a23c6c846d7f9990b72f68686c641cd53c"
+        insight_api_key="your_api_key"
     )
 
 )
