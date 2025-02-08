@@ -6,10 +6,10 @@
 
   # Klarity 
 
-**Understand & fix generative models behavior, starting with uncertainty mitigation**
+**Toolkit for LLM behavior analysis & uncertainty mitigation**
     <br>
     <br>
-    🐳 **Now supporting reasoning models CoT entropy analysis** 
+    🐳 **Now with reasoning model support to analyse CoTs entropy and improve RL datasets**
     <br>
     <br>
   <a href="https://discord.gg/wCnTRzBE">
@@ -19,9 +19,9 @@
 
 ## 🎯 Overview
 
-Klarity is your toolkit for looking into the AI decision-making process. By combining uncertainty analysis with reasoning insights, it provides unprecedented visibility into how models think and generate outputs.
+Klarity is a toolkit for inspecting and debugging AI decision-making processes. By combining uncertainty analysis with reasoning insights, it helps you understand how models think and fix issues before they reach production.
 
-- **Dual Entropy Analysis**: Understand model confidence through raw entropy and semantic similarity metrics
+- **Dual Entropy Analysis**: Measure model confidence through raw entropy and semantic similarity metrics
 - **Reasoning Analysis**: Extract and evaluate step-by-step thinking patterns in model outputs
 - **Semantic Clustering**: Group similar predictions to reveal decision-making pathways
 - **Structured Insights**: Get detailed JSON analysis of both uncertainty patterns and reasoning steps
@@ -48,7 +48,7 @@ pip install git+https://github.com/klara-research/klarity.git
 ### 📝 Reasoning LLM Usage Example
 For insights and uncertainty analytics into model reasoning patterns, you can use the ReasoningAnalyzer:
 
-```
+```python
 from klarity.core.analyzer import ReasoningAnalyzer
 
 # Create estimator with reasoning analyzer
@@ -107,7 +107,7 @@ from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
 
 # Initialize your model
-model_name = "Qwen/Qwen2.5-7B"
+model_name = "Qwen/Qwen2.5-7B-Instruct"
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
