@@ -1,8 +1,8 @@
-# Klarity
+
 
 <div align="center">
 
-  <img src="assets/detectivebird2.png" alt="Mascotte" width="400" style="border-radius: 20px; margin: 20px 0;"/>
+  <img src="assets/detectivebird2.png" alt="Mascotte" width="800" style="border-radius: 20px; margin: 20px 0;"/>
 
   # Klarity 
 
