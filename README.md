@@ -6,7 +6,8 @@
 
   # Klarity 
 
- **Understand & fix uncertainty in generative models predictions**
+ **Understand & fix in generative models behaviour, starting with uncertainty entropy**
+    <br>
     <br>
     ✅ **Now supporting model CoT reasoning analysis** 
     <br>
