@@ -63,7 +63,7 @@ def test_process_logits(estimator: UncertaintyEstimator, mock_tokenizer: MockTok
     total_prob = sum(t.probability for t in token_info)
     assert 0.99 <= total_prob <= 1.01
 
-def test_analyze_generation(estimator : UncertaintyEstimator, mock_tokenizer: MockTokenizer, sample_generation_output, logits_processor: UncertaintyLogitsProcessor):
+def test_analyze_generation(estimator, mock_tokenizer, sample_generation_output, logits_processor):
     # Add some sample logits
     logits_processor.captured_logits.append(torch.randn(1, 5))
     logits_processor.captured_logits.append(torch.randn(1, 5))
