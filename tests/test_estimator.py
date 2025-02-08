@@ -1,12 +1,11 @@
 # work in progess
 import pytest
 import torch
-from transformers import PreTrainedTokenizer
 from klarity.estimator import UncertaintyEstimator, UncertaintyLogitsProcessor
 from klarity.core.analyzer import EntropyAnalyzer
 
 class MockTokenizer:
-    def decode(self, token_id):
+    def decode(self, token_id, skip_special_tokens=False):
         return f"token_{token_id}"
 
 @pytest.fixture
@@ -15,7 +14,7 @@ def mock_tokenizer():
 
 @pytest.fixture
 def estimator():
-    return UncertaintyEstimator(top_k=3)
+    return UncertaintyEstimator(top_k=5, analyzer=EntropyAnalyzer(min_token_prob=0.02))
 
 @pytest.fixture
 def logits_processor(estimator):
@@ -34,9 +33,9 @@ def sample_generation_output():
     return MockGenerationOutput()
 
 def test_init():
-    estimator = UncertaintyEstimator(top_k=100)
-    assert estimator.top_k == 100
-    assert isinstance(estimator.analyzer, EntropyAnalyzer)
+    estimator = UncertaintyEstimator(top_k=100, analyzer=EntropyAnalyzer(min_token_prob=0.02))
+    assert estimator.top_k == 100, "top_k should be 100"
+    assert isinstance(estimator.analyzer, EntropyAnalyzer), "analyzer should be an instance of EntropyAnalyzer"
     
     custom_analyzer = EntropyAnalyzer(min_token_prob=0.02)
     estimator = UncertaintyEstimator(top_k=50, analyzer=custom_analyzer)
@@ -56,7 +55,7 @@ def test_logits_processor_call(logits_processor, sample_logits):
     assert len(logits_processor.captured_logits) == 1
     assert torch.equal(logits_processor.captured_logits[0], sample_logits)
 
-def test_process_logits(estimator, mock_tokenizer, sample_logits):
+def test_process_logits(estimator: UncertaintyEstimator, mock_tokenizer: MockTokenizer, sample_logits: torch.Tensor):
     token_info = estimator._process_logits(sample_logits, mock_tokenizer)
     
     assert len(token_info) == estimator.top_k
@@ -73,7 +72,7 @@ def test_analyze_generation(estimator, mock_tokenizer, sample_generation_output,
         sample_generation_output,
         mock_tokenizer,
         logits_processor
-    )
+    ).token_metrics
     
     assert len(metrics_list) == len(logits_processor.captured_logits)
     for metrics in metrics_list:
@@ -86,7 +85,7 @@ def test_empty_generation(estimator, mock_tokenizer, sample_generation_output, l
         sample_generation_output,
         mock_tokenizer,
         logits_processor
-    )
+    ).token_metrics
     assert len(metrics_list) == 0
 
 def test_process_logits_top_k(estimator, mock_tokenizer):
