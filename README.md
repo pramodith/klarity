@@ -6,8 +6,10 @@
 
   # Klarity 
 
-  _Understand & fix uncertainty in generative model predictions_
-  <br>
+ **Understand & fix uncertainty in generative models predictions**
+    <br>
+    ✅ **Now supporting model CoT reasoning analysis** 
+    <br>
   <br>
   <a href="https://discord.gg/wCnTRzBE">
     <img src="assets/discord.png" alt="Join our Discord" width="150"/>
@@ -16,12 +18,13 @@
 
 ## 🎯 Overview
 
-Klarity is a tool for analyzing uncertainty in generative model outputs. It combines both raw probability analysis and semantic understanding to provide deep insights into model behavior during text generation. The library offers:
+Klarity is your toolkit for looking into the AI decision-making process. By combining uncertainty analysis with reasoning insights, it provides unprecedented visibility into how models think and generate outputs.
 
-- **Dual Entropy Analysis**: Combines raw probability entropy with semantic similarity-based entropy
-- **Semantic Clustering**: Groups similar predictions to understand model decision-making
-- **Structured Output**: Returns detailed JSON analysis of generation patterns
-- **AI-powered Analysis**: Uses a separate model to analyze generation patterns and provide human-readable insights
+- **Dual Entropy Analysis**: Understand model confidence through raw entropy and semantic similarity metrics
+- **Reasoning Analysis**: Extract and evaluate step-by-step thinking patterns in model outputs
+- **Semantic Clustering**: Group similar predictions to reveal decision-making pathways
+- **Structured Insights**: Get detailed JSON analysis of both uncertainty patterns and reasoning steps
+- **AI-powered Report**: Leverage capable models to interpret generation patterns and provide human-readable insights
 
 <div align="center">
   <br>
@@ -41,7 +44,62 @@ Install directly from GitHub:
 pip install git+https://github.com/klara-research/klarity.git
 ```
 
-Basic usage example:
+### 📝 Reasoning LLM Usage Example
+For insights and uncertainty analytics into model reasoning patterns, you can use the ReasoningAnalyzer:
+
+```
+from klarity.core.analyzer import ReasoningAnalyzer
+
+# Create estimator with reasoning analyzer
+estimator = UncertaintyEstimator(
+    top_k=100,
+    analyzer=ReasoningAnalyzer(
+        min_token_prob=0.01,
+        insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        insight_api_key="your_api_key",
+        reasoning_start_token="<think>", # You can change this if you have different reasoning tokens
+        reasoning_end_token="</think>"   
+    )
+)
+
+# Generate with reasoning analysis
+prompt = "Your prompt <think>"
+inputs = tokenizer(prompt, return_tensors="pt")
+
+generation_output = model.generate(
+    **inputs,
+    max_new_tokens=200,
+    temperature=0.6,
+    logits_processor=LogitsProcessorList([uncertainty_processor]),
+    return_dict_in_generate=True,
+    output_scores=True,
+)
+
+result = estimator.analyze_generation(
+    generation_output,
+    tokenizer,
+    uncertainty_processor,
+    prompt
+)
+
+# Print reasoning analysis
+print("\nReasoning Analysis:")
+if result.overall_insight and "reasoning_analysis" in result.overall_insight:
+    analysis = result.overall_insight["reasoning_analysis"]
+    for step in analysis["steps"]:
+        print(f"\nStep {step['step_number']}:")
+        print(f"Content: {step['step_info']['content']}")
+        
+        if 'analysis' in step:
+            step_analysis = step['analysis']['training_insights']
+            print("\nQuality Metrics:")
+            for metric, score in step_analysis['step_quality'].items():
+                print(f"  {metric}: {score}")
+```
+
+### 📝 Standard LLM Usage Example
+To prevent most of common uncertainty scenarios and route to better models you can use our EntropyAnalyzer
+
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorList
 from klarity import UncertaintyEstimator
@@ -107,8 +165,46 @@ print(result.overall_insight)
 ```
 
 ## 📊 Analysis Output
+Klarity provides two types of analysis output:
 
-Klarity provides a structured JSON analysis for each generation, the insight quality depends on the model that you choose.
+### Reasoning Analysis
+You'll get detailed insights into the model's reasoning process:
+
+```json
+{
+    "reasoning_analysis": {
+        "steps": [
+            {
+                "step_number": 1,
+                "step_info": {
+                    "content": "Step reasoning content",
+                    "type": "analysis"
+                },
+                "analysis": {
+                    "training_insights": {
+                        "step_quality": {
+                            "coherence": "0.8",
+                            "relevance": "0.9",
+                            "confidence": "0.7"
+                        },
+                        "improvement_targets": [
+                            {
+                                "aspect": "conciseness",
+                                "importance": "0.8",
+                                "current_issue": "verbose response",
+                                "training_suggestion": "reduce explanation steps"
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+}
+```
+
+### Entropy Analysis
+For standard language models you will get a general uncertainty report:
 
 ```json
 {
@@ -168,7 +264,9 @@ Planned support:
 | Qwen2.5-0.5B-Instruct | Instruct | ✅ Tested | Full Support |
 | Qwen2.5-7B | Base | ✅ Tested | Full Support |
 | Qwen2.5-7B-Instruct | Instruct | ✅ Tested | Full Support |
-| Llama-3.2-3B-Instruct | Instruct | ✅ Tested | - |
+| Llama-3.2-3B-Instruct | Instruct | ✅ Tested | Full Support |
+| DeepSeek-R1-Distill-Qwen-1.5B | Reasoning | ✅ Tested | Together API Insights |
+| DeepSeek-R1-Distill-Qwen-7B | Reasoning | ✅ Tested | Together API Insights |
 
 ### Analysis Models
 | Model | Type | Status | JSON Reliability | Notes |
