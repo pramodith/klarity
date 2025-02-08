@@ -6,10 +6,10 @@
 
   # Klarity 
 
-**Understand & fix generative models behavior, starting with uncertainty estimation**
+**Understand & fix generative models behavior, starting with uncertainty mitigation**
     <br>
     <br>
-    ✅ **Now supporting CoT reasoning entropy analysis** 
+    🐳 **Now supporting reasoning models CoT entropy analysis** 
     <br>
     <br>
   <a href="https://discord.gg/wCnTRzBE">
