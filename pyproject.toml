@@ -7,7 +7,7 @@ name = "klarity"
 version = "0.1.0"
 description = "Uncertainty estimation for open-source generative models"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "torch>=2.0.0,<2.6.0",
     "sentence-transformers>=3.0.0",
@@ -28,3 +28,12 @@ Repository = "https://github.com/klara-research/klarity.git"
 package-dir = {"" = "src"}
 packages = ["klarity", "klarity.core"]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-s"
+testpaths = ["tests"]

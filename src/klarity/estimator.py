@@ -89,6 +89,8 @@ class UncertaintyEstimator:
         prompt: Optional[str] = None
     ) -> UncertaintyAnalysisResult:
         """Analyze generation with available probability information"""
+        # Set default step to 0, this will be updated in the for loop
+        step = 0 
         all_metrics = []
         
         if self.together_model:

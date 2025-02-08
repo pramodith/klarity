@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  push:
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - '.github/workflows/test.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - '.github/workflows/test.yml'
+
+jobs:
+  test:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          # - "3.12" # Remove 3.12 for the moment
+        runner:
+          # - macos-latest # Remove macos for the moment, but would be good to add back in at a later stage
+          - ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Run tests
+        run: |
+          uv run pytest
+
