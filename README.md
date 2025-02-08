@@ -314,3 +314,9 @@ Apache 2.0 License. See [LICENSE](LICENSE) for more information.
 - [Discord Community](https://discord.gg/wCnTRzBE) for discussions & chatting
 - [GitHub Issues](https://github.com/klara-research/klarity/issues) for bugs and features
 
+
+<div align="center">
+
+  <img src="assets/banner.png" alt="Mascotte" width="800" style="border-radius: 20px; margin: 20px 0;"/>
+
+</div>
