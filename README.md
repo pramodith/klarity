@@ -317,6 +317,6 @@ Apache 2.0 License. See [LICENSE](LICENSE) for more information.
 
 <div align="center">
 
-  <img src="assets/banner.png" alt="Mascotte" width="800" style="border-radius: 20px; margin: 20px 0;"/>
+  <img src="assets/banner.png" alt="banner" width="800"/>
 
 </div>
