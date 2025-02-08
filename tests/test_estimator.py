@@ -14,7 +14,7 @@ def mock_tokenizer():
 
 @pytest.fixture
 def estimator():
-    return UncertaintyEstimator(top_k=3)
+    return UncertaintyEstimator(top_k=5)
 
 @pytest.fixture
 def logits_processor(estimator):
