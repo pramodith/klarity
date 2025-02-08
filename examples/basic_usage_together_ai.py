@@ -15,7 +15,7 @@ estimator = UncertaintyEstimator(
 )
 
 # Generate and analyze
-prompt = "What is the capital of furufurufuru?"
+prompt = "Your prompt"
 generation_output = estimator._generate_with_together(
     prompt=prompt,
     max_new_tokens=10,

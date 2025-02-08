@@ -1,6 +1,6 @@
 # models.py
 from pydantic import BaseModel, ConfigDict
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
 
 class TokenInfo(BaseModel):
     token: str
@@ -24,5 +24,5 @@ class UncertaintyAnalysisRequest(BaseModel):
 
 class UncertaintyAnalysisResult(BaseModel):
     token_metrics: List[UncertaintyMetrics]
-    overall_insight: Optional[str] = None
+    overall_insight: Optional[Union[str, Dict]] = None
     model_config = ConfigDict(protected_namespaces=())

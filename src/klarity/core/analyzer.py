@@ -7,6 +7,9 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from collections import defaultdict
 from ..models import TokenInfo, UncertaintyAnalysisRequest, UncertaintyMetrics
+import json
+import re
+import traceback
 
 class EntropyAnalyzer:
     def __init__(
@@ -194,3 +197,237 @@ Analysis:"""
         )
 
         return metrics
+    
+
+
+class ReasoningAnalyzer(EntropyAnalyzer):
+    def __init__(
+        self,
+        reasoning_start_token: str = "<think>",
+        reasoning_end_token: str = "</think>",
+        *args,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.reasoning_start_token = reasoning_start_token
+        self.reasoning_end_token = reasoning_end_token
+        
+        # Template to identify reasoning steps
+        self.reasoning_identification_template = """Find content between {start_token} and {end_token} markers in this text and return only a JSON response:
+
+{text}
+Identify the and split key reasoning steps in the thought process.
+
+Return ONLY the EXACT text found between the markers as JSON:
+{{
+    "reasoning_steps": [
+        {{
+            "step_number": (step_number),
+            "content": (exact text found between markers),
+            "position": [start_index_in_text, end_index_in_text],
+            "step_type": (type of reasoning step: premise/analysis/conclusion)
+        }}
+    ]
+}}"""
+
+
+        self.step_analysis_template = """Analyze this step:
+{reasoning_content}
+Query: {input_query}
+Step {step_number} of {total_steps}
+Metrics: {detailed_metrics}
+
+Return ONLY this exact JSON structure:
+{{
+    "training_insights": {{
+        "step_quality": {{
+            "coherence": "0.8",
+            "relevance": "0.9",
+            "confidence": "0.7"
+        }},
+        "improvement_targets": [
+            {{
+                "aspect": "conciseness",
+                "importance": "0.8",
+                "current_issue": "verbose response",
+                "training_suggestion": "reduce explanation steps"
+            }}
+        ],
+        "tokens_of_interest": [
+            {{
+                "token": "test",
+                "why_flagged": "reason",
+                "entropy": "0.5"
+            }}
+        ]
+    }}
+}}"""
+
+
+
+    def identify_reasoning_steps(self, text: str) -> List[Dict]:
+        """Use the insight model to identify reasoning steps"""
+        try:
+            prompt = self.reasoning_identification_template.format(
+                start_token=self.reasoning_start_token,
+                end_token=self.reasoning_end_token,
+                text=text
+            )
+            
+            if self.together_model:
+                response = self.together_model.generate_insight(prompt)
+                print("\nDEBUG - Raw response:")
+                print(response)
+                
+                # Clean up the response by removing markdown code blocks
+                cleaned_response = response.replace("```json", "").replace("```", "").strip()
+                
+                try:
+                    parsed = json.loads(cleaned_response)
+                    print("\nDEBUG - Parsed JSON:")
+                    print(json.dumps(parsed, indent=2))
+                    return parsed.get("reasoning_steps", [])
+                except json.JSONDecodeError as e:
+                    print(f"\nDEBUG - JSON parsing error: {e}")
+                    print("Cleaned response:", cleaned_response)
+                    return []
+                    
+        except Exception as e:
+            print(f"Error in identify_reasoning_steps: {str(e)}")
+            return []
+
+    def analyze_reasoning_step(self, step_info: Dict, metrics_list: List[UncertaintyMetrics], input_query: str, total_steps: int) -> Dict:
+        try:
+            start_idx = step_info["position"][0]
+            end_idx = step_info["position"][1]
+            step_metrics = self._get_metrics_for_range(metrics_list, start_idx, end_idx)
+            
+            detailed_metrics = self._format_metrics(step_metrics)
+            
+            prompt = self.step_analysis_template.format(
+                reasoning_content=step_info["content"],
+                input_query=input_query,
+                step_number=step_info.get("step_number", 1),
+                total_steps=total_steps,
+                detailed_metrics=detailed_metrics
+            )
+
+            if self.together_model:
+                response = self.together_model.generate_insight(prompt)
+                print(f"\nDEBUG - Raw response from analysis: {response}")
+                
+                # Find JSON content
+                start = response.find("{")
+                end = response.rfind("}") + 1
+                
+                if start >= 0 and end > start:
+                    json_str = response[start:end]
+                    # Remove any potential line breaks or comments in the JSON
+                    json_str = re.sub(r'#.*$', '', json_str, flags=re.MULTILINE)
+                    json_str = json_str.replace('\n', '').replace('\\n', '')
+                    
+                    try:
+                        return json.loads(json_str)
+                    except json.JSONDecodeError as e:
+                        print(f"JSON parsing error: {e}")
+                        print(f"Attempted to parse: {json_str}")
+                        # Return a default structure
+                        return {
+                            "training_insights": {
+                                "step_quality": {"coherence": "0.5", "relevance": "0.5", "confidence": "0.5"},
+                                "improvement_targets": [],
+                                "tokens_of_interest": []
+                            }
+                        }
+                
+                return {"error": "No JSON found in response"}
+                
+        except Exception as e:
+            print(f"Error in analyze_reasoning_step: {str(e)}")
+            traceback.print_exc()  # Add this for more detailed error info
+            return {"error": f"Analysis failed: {str(e)}"}
+
+    def _get_metrics_for_range(
+        self,
+        metrics_list: List[UncertaintyMetrics],
+        start_idx: int,
+        end_idx: int
+    ) -> List[UncertaintyMetrics]:
+        """Extract metrics for a specific token range"""
+        return metrics_list[start_idx:end_idx]
+
+    def _format_metrics(self, metrics: List[UncertaintyMetrics]) -> str:
+        """Format metrics for the prompt"""
+        formatted = []
+        for idx, metric in enumerate(metrics):
+            top_predictions = [
+                f"{t.token} ({t.probability:.3f})"
+                for t in metric.token_predictions[:3]
+            ]
+            
+            metric_text = (
+                f"Token {idx}:\n"
+                f"- Raw Entropy: {metric.raw_entropy:.4f}\n"
+                f"- Semantic Entropy: {metric.semantic_entropy:.4f}\n"
+                f"- Top Predictions: {' | '.join(top_predictions)}"
+            )
+            formatted.append(metric_text)
+            
+        return "\n\n".join(formatted)
+
+    def generate_overall_insight(
+        self,
+        metrics_list: List[UncertaintyMetrics],
+        input_query: Optional[str] = "",
+        generated_text: Optional[str] = ""
+    ) -> Optional[Dict]:
+        """Generate comprehensive analysis of all reasoning steps"""
+        if not (self.together_model or (self.insight_model and self.insight_tokenizer)):
+            return None
+
+        # Identify reasoning steps
+        reasoning_steps = self.identify_reasoning_steps(generated_text)
+        if not reasoning_steps:
+            return None
+
+        # Analyze each step
+        step_analyses = []
+        for step in reasoning_steps:
+            analysis = self.analyze_reasoning_step(
+                step,
+                metrics_list,
+                input_query,
+                len(reasoning_steps)
+            )
+            step_analyses.append({
+                "step_info": step,
+                "analysis": analysis
+            })
+
+        # Compile overall assessment
+        return {
+            "reasoning_analysis": {
+                "steps": step_analyses,
+                "overall_metrics": {
+                    "total_steps": len(reasoning_steps),
+                    "average_raw_entropy": sum(m.raw_entropy for m in metrics_list) / len(metrics_list),
+                    "average_semantic_entropy": sum(m.semantic_entropy for m in metrics_list) / len(metrics_list),
+                    "reasoning_flow_score": self._calculate_flow_score(step_analyses)
+                }
+            }
+        }
+
+    def _calculate_flow_score(self, step_analyses: List[Dict]) -> float:
+        """Calculate how well reasoning steps flow together"""
+        try:
+            # Update this to match the actual JSON structure we receive
+            coherence_scores = [
+                float(step["analysis"].get("training_insights", {})
+                    .get("step_quality", {})
+                    .get("coherence", "0.5"))
+                for step in step_analyses
+            ]
+            return sum(coherence_scores) / len(coherence_scores) if coherence_scores else 0.0
+        except (KeyError, ValueError, AttributeError) as e:
+            print(f"Error calculating flow score: {e}")
+            return 0.0

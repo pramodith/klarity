@@ -25,6 +25,11 @@ Klarity is a tool for analyzing uncertainty in generative model outputs. It comb
 
 <div align="center">
   <br>
+  <p><i>Reasoning Analysis Example - Understanding model's step-by-step thinking process</i></p>
+  <img src="assets/example2.png" alt="example2" width="800">
+  <br>
+  <br>
+  <p><i>Entropy Analysis Example - Analyzing token-level uncertainty patterns</i></p>
   <img src="assets/example.png" alt="example" width="800"/>
   <br>
 </div>
