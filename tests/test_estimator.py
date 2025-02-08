@@ -14,7 +14,7 @@ def mock_tokenizer():
 
 @pytest.fixture
 def estimator():
-    return UncertaintyEstimator(top_k=5)
+    return UncertaintyEstimator(top_k=5, analyzer=EntropyAnalyzer(min_token_prob=0.02))
 
 @pytest.fixture
 def logits_processor(estimator):
@@ -63,7 +63,7 @@ def test_process_logits(estimator: UncertaintyEstimator, mock_tokenizer: MockTok
     total_prob = sum(t.probability for t in token_info)
     assert 0.99 <= total_prob <= 1.01
 
-def test_analyze_generation(estimator, mock_tokenizer, sample_generation_output, logits_processor):
+def test_analyze_generation(estimator : UncertaintyEstimator, mock_tokenizer: MockTokenizer, sample_generation_output, logits_processor: UncertaintyLogitsProcessor):
     # Add some sample logits
     logits_processor.captured_logits.append(torch.randn(1, 5))
     logits_processor.captured_logits.append(torch.randn(1, 5))
@@ -72,7 +72,7 @@ def test_analyze_generation(estimator, mock_tokenizer, sample_generation_output,
         sample_generation_output,
         mock_tokenizer,
         logits_processor
-    )
+    ).token_metrics
     
     assert len(metrics_list) == len(logits_processor.captured_logits)
     for metrics in metrics_list:
@@ -85,7 +85,7 @@ def test_empty_generation(estimator, mock_tokenizer, sample_generation_output, l
         sample_generation_output,
         mock_tokenizer,
         logits_processor
-    )
+    ).token_metrics
     assert len(metrics_list) == 0
 
 def test_process_logits_top_k(estimator, mock_tokenizer):
