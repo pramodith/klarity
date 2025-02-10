@@ -1,4 +1,4 @@
-#basic_usage_hosted_insights.py
+# basic_usage_hosted_insights.py
 from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorList
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
@@ -14,9 +14,8 @@ estimator = UncertaintyEstimator(
     analyzer=EntropyAnalyzer(
         min_token_prob=0.01,
         insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        insight_api_key="your_api_key"
-    )
-
+        insight_api_key="your_api_key",
+    ),
 )
 uncertainty_processor = estimator.get_logits_processor()
 
@@ -37,13 +36,13 @@ generation_output = model.generate(
 
 # Analyze the generation
 result = estimator.analyze_generation(
-    generation_output,
-    tokenizer,
-    uncertainty_processor
+    generation_output, tokenizer, uncertainty_processor
 )
 
 # Get generated text
-generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
+generated_text = tokenizer.decode(
+    generation_output.sequences[0], skip_special_tokens=True
+)
 print(f"\nPrompt: {prompt}")
 print(f"Generated text: {generated_text}")
 

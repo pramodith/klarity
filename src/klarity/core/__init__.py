@@ -1,3 +1,3 @@
 from .analyzer import EntropyAnalyzer
 
-__all__ = ['EntropyAnalyzer']
+__all__ = ["EntropyAnalyzer"]
