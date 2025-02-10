@@ -78,9 +78,7 @@ def test_calculate_group_probabilities(analyzer, sample_token_info):
 
 
 def test_analyze_empty_request(analyzer):
-    empty_request = UncertaintyAnalysisRequest(
-        logits=[], prompt="", model_id="test", token_info=[]
-    )
+    empty_request = UncertaintyAnalysisRequest(logits=[], prompt="", model_id="test", token_info=[])
     metrics = analyzer.analyze(empty_request)
     assert metrics.raw_entropy == 0.0
     assert metrics.semantic_entropy == 0.0
@@ -88,9 +86,7 @@ def test_analyze_empty_request(analyzer):
 
 def test_analyze_single_token(analyzer):
     single_token = [TokenInfo(token="test", token_id=0, logit=0.0, probability=1.0)]
-    request = UncertaintyAnalysisRequest(
-        logits=[0.0], prompt="test", model_id="test", token_info=single_token
-    )
+    request = UncertaintyAnalysisRequest(logits=[0.0], prompt="test", model_id="test", token_info=single_token)
     metrics = analyzer.analyze(request)
     assert metrics.raw_entropy == 0.0  # Single token should have zero entropy
     assert metrics.semantic_entropy == 0.0

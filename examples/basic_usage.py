@@ -11,9 +11,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 # Create estimator
 estimator = UncertaintyEstimator(
     top_k=100,
-    analyzer=EntropyAnalyzer(
-        min_token_prob=0.01, insight_model=model, insight_tokenizer=tokenizer
-    ),
+    analyzer=EntropyAnalyzer(min_token_prob=0.01, insight_model=model, insight_tokenizer=tokenizer),
 )
 
 uncertainty_processor = estimator.get_logits_processor()
@@ -34,13 +32,9 @@ generation_output = model.generate(
 )
 
 # Analyze the generation
-result = estimator.analyze_generation(
-    generation_output, tokenizer, uncertainty_processor
-)
+result = estimator.analyze_generation(generation_output, tokenizer, uncertainty_processor)
 
-generated_text = tokenizer.decode(
-    generation_output.sequences[0], skip_special_tokens=True
-)
+generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
 
 # Inspect results
 print(f"\nPrompt: {prompt}")

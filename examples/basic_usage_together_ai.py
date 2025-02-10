@@ -16,9 +16,7 @@ estimator = UncertaintyEstimator(
 
 # Generate and analyze
 prompt = "Your prompt"
-generation_output = estimator._generate_with_together(
-    prompt=prompt, max_new_tokens=10, temperature=0.7
-)
+generation_output = estimator._generate_with_together(prompt=prompt, max_new_tokens=10, temperature=0.7)
 
 result = estimator.analyze_generation(generation_output)
 
