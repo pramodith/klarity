@@ -31,9 +31,13 @@ packages = ["klarity", "klarity.core"]
 [dependency-groups]
 dev = [
     "pytest>=8.3.4",
+    "ruff>=0.8.0"
 ]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-s"
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120

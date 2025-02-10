@@ -39,10 +39,18 @@ One of the best ways to support us is by sharing your experience with Klarity! W
 ## Making Contributions ❤️
 
 1. Fork the repository
-2. Create a new branch for your feature: `git checkout -b feature/amazing-feature`
-3. Make your changes
-4. Run tests: `python -m pytest tests/`
-5. Submit a PR with a clear description of your changes
+2. We use uv as our python project manager. To learn how to install uv visit [here](https://docs.astral.sh/uv/getting-started/)
+3. Install dependencies by running `uv pip install -r pyproject.toml`
+4. Create a new branch for your feature: `git checkout -b feature/amazing-feature`
+5. Make your changes
+6. Run tests: `python -m pytest tests/`
+7. Lint and clean your code using 
+```
+uv tool install ruff (one time only)
+uvx ruff check 
+uvx ruff clean
+```
+8. Submit a PR with a clear description of your changes
 
 
 ## Spread the Word! 📢

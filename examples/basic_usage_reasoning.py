@@ -19,9 +19,9 @@ estimator = UncertaintyEstimator(
         min_token_prob=0.01,
         insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
         insight_api_key="your_api_key",
-        reasoning_start_token="<think>", 
-        reasoning_end_token="</think>"
-    )
+        reasoning_start_token="<think>",
+        reasoning_end_token="</think>",
+    ),
 )
 uncertainty_processor = estimator.get_logits_processor()
 
@@ -44,11 +44,13 @@ result = estimator.analyze_generation(
     generation_output,
     tokenizer,
     uncertainty_processor,
-    prompt  # Include prompt for better reasoning analysis
+    prompt,  # Include prompt for better reasoning analysis
 )
 
 # Get generated text
-generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
+generated_text = tokenizer.decode(
+    generation_output.sequences[0], skip_special_tokens=True
+)
 print(f"\nPrompt: {prompt}")
 print(f"Generated text: {generated_text}")
 
@@ -56,21 +58,21 @@ print(f"Generated text: {generated_text}")
 print("\nReasoning Analysis:")
 if result.overall_insight and "reasoning_analysis" in result.overall_insight:
     analysis = result.overall_insight["reasoning_analysis"]
-    
+
     # Print each reasoning step
     for idx, step in enumerate(analysis["steps"], 1):
         print(f"\nStep {idx}:")  # Use simple counter instead of accessing step_number
         print(f"Content: {step['step_info']['content']}")
-        
+
         # Print step analysis
-        if 'analysis' in step and 'training_insights' in step['analysis']:
-            step_analysis = step['analysis']['training_insights']
+        if "analysis" in step and "training_insights" in step["analysis"]:
+            step_analysis = step["analysis"]["training_insights"]
             print("\nQuality Metrics:")
-            for metric, score in step_analysis['step_quality'].items():
+            for metric, score in step_analysis["step_quality"].items():
                 print(f"  {metric}: {score}")
-            
+
             print("\nImprovement Targets:")
-            for target in step_analysis['improvement_targets']:
+            for target in step_analysis["improvement_targets"]:
                 print(f"  Aspect: {target['aspect']}")
                 print(f"  Importance: {target['importance']}")
                 print(f"  Issue: {target['current_issue']}")

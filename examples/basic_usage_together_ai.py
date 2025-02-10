@@ -1,4 +1,4 @@
-#basic_usage_together_ai.py
+# basic_usage_together_ai.py
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
 
@@ -8,18 +8,16 @@ estimator = UncertaintyEstimator(
     analyzer=EntropyAnalyzer(
         min_token_prob=0.01,
         insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        insight_api_key="your_api_key"
+        insight_api_key="your_api_key",
     ),
     together_api_key="your_api_key",
-    together_model="meta-llama/Llama-3.3-70B-Instruct-Turbo"
+    together_model="meta-llama/Llama-3.3-70B-Instruct-Turbo",
 )
 
 # Generate and analyze
 prompt = "Your prompt"
 generation_output = estimator._generate_with_together(
-    prompt=prompt,
-    max_new_tokens=10,
-    temperature=0.7
+    prompt=prompt, max_new_tokens=10, temperature=0.7
 )
 
 result = estimator.analyze_generation(generation_output)
