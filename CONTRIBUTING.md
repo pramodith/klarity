@@ -50,6 +50,7 @@ can run `pip install -e ".[dev]"`
 uv tool install ruff (one time only)
 uvx ruff check 
 uvx ruff clean
+uvx ruff format
 ```
 8. Submit a PR with a clear description of your changes
 
