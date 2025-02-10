@@ -44,7 +44,7 @@ One of the best ways to support us is by sharing your experience with Klarity! W
 can run `pip install -e ".[dev]"`
 4. Create a new branch for your feature: `git checkout -b feature/amazing-feature`
 5. Make your changes
-6. Run tests: via `uv pytest` or `python -m pytest tests/`
+6. Run tests: via `uv run pytest` or `python -m pytest tests/`
 7. Lint and clean your code using 
 ```
 uv tool install ruff (one time only)
