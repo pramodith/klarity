@@ -31,9 +31,7 @@ class EntropyAnalyzer:
 
         if isinstance(insight_model, str) and insight_model.startswith("together:"):
             model_name = insight_model.replace("together:", "")
-            self.together_model = TogetherModelWrapper(
-                model_name=model_name, api_key=insight_api_key
-            )
+            self.together_model = TogetherModelWrapper(model_name=model_name, api_key=insight_api_key)
         else:
             self.insight_model = insight_model
             self.insight_tokenizer = insight_tokenizer
@@ -151,18 +149,13 @@ Analysis:"""
         generated_text: Optional[str] = "",
     ) -> Optional[str]:
         """Generate overall insight for all collected metrics"""
-        if not self.together_model and not (
-            self.insight_model and self.insight_tokenizer
-        ):
+        if not self.together_model and not (self.insight_model and self.insight_tokenizer):
             return None
 
         # Format metrics for the prompt
         detailed_metrics = []
         for idx, metrics in enumerate(metrics_list):
-            top_predictions = [
-                f"{t.token} ({t.probability:.3f})"
-                for t in metrics.token_predictions[:3]
-            ]
+            top_predictions = [f"{t.token} ({t.probability:.3f})" for t in metrics.token_predictions[:3]]
 
             step_metrics = (
                 f"Step {idx}:\n"
@@ -183,9 +176,7 @@ Analysis:"""
             return self.together_model.generate_insight(prompt)
 
         # Use original model
-        inputs = self.insight_tokenizer(prompt, return_tensors="pt").to(
-            self.insight_model.device
-        )
+        inputs = self.insight_tokenizer(prompt, return_tensors="pt").to(self.insight_model.device)
         outputs = self.insight_model.generate(
             inputs.input_ids,
             max_new_tokens=400,
@@ -193,11 +184,7 @@ Analysis:"""
             top_p=0.9,
             do_sample=True,
         )
-        return (
-            self.insight_tokenizer.decode(outputs[0], skip_special_tokens=True)
-            .split("Analysis:")[-1]
-            .strip()
-        )
+        return self.insight_tokenizer.decode(outputs[0], skip_special_tokens=True).split("Analysis:")[-1].strip()
 
     def analyze(self, request: UncertaintyAnalysisRequest) -> UncertaintyMetrics:
         """Analyze uncertainty for a single generation step"""
@@ -291,9 +278,7 @@ Return ONLY this exact JSON structure:
                 print(response)
 
                 # Clean up the response by removing markdown code blocks
-                cleaned_response = (
-                    response.replace("```json", "").replace("```", "").strip()
-                )
+                cleaned_response = response.replace("```json", "").replace("```", "").strip()
 
                 try:
                     parsed = json.loads(cleaned_response)
@@ -380,9 +365,7 @@ Return ONLY this exact JSON structure:
         """Format metrics for the prompt"""
         formatted = []
         for idx, metric in enumerate(metrics):
-            top_predictions = [
-                f"{t.token} ({t.probability:.3f})" for t in metric.token_predictions[:3]
-            ]
+            top_predictions = [f"{t.token} ({t.probability:.3f})" for t in metric.token_predictions[:3]]
 
             metric_text = (
                 f"Token {idx}:\n"
@@ -412,9 +395,7 @@ Return ONLY this exact JSON structure:
         # Analyze each step
         step_analyses = []
         for step in reasoning_steps:
-            analysis = self.analyze_reasoning_step(
-                step, metrics_list, input_query, len(reasoning_steps)
-            )
+            analysis = self.analyze_reasoning_step(step, metrics_list, input_query, len(reasoning_steps))
             step_analyses.append({"step_info": step, "analysis": analysis})
 
         # Compile overall assessment
@@ -423,12 +404,8 @@ Return ONLY this exact JSON structure:
                 "steps": step_analyses,
                 "overall_metrics": {
                     "total_steps": len(reasoning_steps),
-                    "average_raw_entropy": sum(m.raw_entropy for m in metrics_list)
-                    / len(metrics_list),
-                    "average_semantic_entropy": sum(
-                        m.semantic_entropy for m in metrics_list
-                    )
-                    / len(metrics_list),
+                    "average_raw_entropy": sum(m.raw_entropy for m in metrics_list) / len(metrics_list),
+                    "average_semantic_entropy": sum(m.semantic_entropy for m in metrics_list) / len(metrics_list),
                     "reasoning_flow_score": self._calculate_flow_score(step_analyses),
                 },
             }
@@ -439,19 +416,10 @@ Return ONLY this exact JSON structure:
         try:
             # Update this to match the actual JSON structure we receive
             coherence_scores = [
-                float(
-                    step["analysis"]
-                    .get("training_insights", {})
-                    .get("step_quality", {})
-                    .get("coherence", "0.5")
-                )
+                float(step["analysis"].get("training_insights", {}).get("step_quality", {}).get("coherence", "0.5"))
                 for step in step_analyses
             ]
-            return (
-                sum(coherence_scores) / len(coherence_scores)
-                if coherence_scores
-                else 0.0
-            )
+            return sum(coherence_scores) / len(coherence_scores) if coherence_scores else 0.0
         except (KeyError, ValueError, AttributeError) as e:
             print(f"Error calculating flow score: {e}")
             return 0.0

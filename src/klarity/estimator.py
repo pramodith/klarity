@@ -13,9 +13,7 @@ class UncertaintyLogitsProcessor(LogitsProcessor):
         self.captured_logits = []
         self.estimator = estimator
 
-    def __call__(
-        self, input_ids: torch.LongTensor, scores: torch.FloatTensor
-    ) -> torch.FloatTensor:
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         self.captured_logits.append(scores.detach().clone())
         return scores
 
@@ -31,18 +29,14 @@ class UncertaintyEstimator:
         self.analyzer = analyzer
         # max log probs provided by the api
         self.top_k = 5 if together_model else top_k
-        self.together_client = (
-            Together(api_key=together_api_key) if together_api_key else None
-        )
+        self.together_client = Together(api_key=together_api_key) if together_api_key else None
         self.together_model = together_model
 
     def get_logits_processor(self) -> LogitsProcessor:
         """Get appropriate logits processor based on model type"""
         return UncertaintyLogitsProcessor(self)
 
-    def _process_logits(
-        self, logits: torch.Tensor, tokenizer: PreTrainedTokenizer
-    ) -> List[TokenInfo]:
+    def _process_logits(self, logits: torch.Tensor, tokenizer: PreTrainedTokenizer) -> List[TokenInfo]:
         """Process HuggingFace logits into TokenInfo objects"""
         probs = torch.softmax(logits, dim=-1)
         top_probs, top_indices = torch.topk(probs[0], self.top_k)
@@ -131,24 +125,16 @@ class UncertaintyEstimator:
         else:
             # HuggingFace processing
             if not tokenizer or not processor:
-                raise ValueError(
-                    "Tokenizer and processor required for HuggingFace models"
-                )
+                raise ValueError("Tokenizer and processor required for HuggingFace models")
 
-            generated_text = tokenizer.decode(
-                generation_output.sequences[0], skip_special_tokens=True
-            )
+            generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
 
             for step, logits in enumerate(processor.captured_logits):
                 token_info = self._process_logits(logits, tokenizer)
 
                 metrics = UncertaintyMetrics(
-                    raw_entropy=self.analyzer._calculate_raw_entropy(
-                        np.array([t.probability for t in token_info])
-                    ),
-                    semantic_entropy=self.analyzer._calculate_semantic_entropy(
-                        token_info
-                    ),
+                    raw_entropy=self.analyzer._calculate_raw_entropy(np.array([t.probability for t in token_info])),
+                    semantic_entropy=self.analyzer._calculate_semantic_entropy(token_info),
                     token_predictions=token_info,
                 )
                 all_metrics.append(metrics)
@@ -157,13 +143,9 @@ class UncertaintyEstimator:
 
         # Generate overall insight using existing analyzer
         overall_insight = (
-            self.analyzer.generate_overall_insight(
-                all_metrics, input_query=input_query, generated_text=generated_text
-            )
+            self.analyzer.generate_overall_insight(all_metrics, input_query=input_query, generated_text=generated_text)
             if self.analyzer
             else None
         )
 
-        return UncertaintyAnalysisResult(
-            token_metrics=all_metrics, overall_insight=overall_insight
-        )
+        return UncertaintyAnalysisResult(token_metrics=all_metrics, overall_insight=overall_insight)

@@ -35,14 +35,10 @@ generation_output = model.generate(
 )
 
 # Analyze the generation
-result = estimator.analyze_generation(
-    generation_output, tokenizer, uncertainty_processor
-)
+result = estimator.analyze_generation(generation_output, tokenizer, uncertainty_processor)
 
 # Get generated text
-generated_text = tokenizer.decode(
-    generation_output.sequences[0], skip_special_tokens=True
-)
+generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
 print(f"\nPrompt: {prompt}")
 print(f"Generated text: {generated_text}")
 
