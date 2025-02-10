@@ -1,8 +1,8 @@
 # work in progess
 import pytest
 import torch
-from src.klarity.estimator import UncertaintyEstimator, UncertaintyLogitsProcessor
-from src.klarity.core.analyzer import EntropyAnalyzer
+from klarity.estimator import UncertaintyEstimator, UncertaintyLogitsProcessor
+from klarity.core.analyzer import EntropyAnalyzer
 
 
 class MockTokenizer:

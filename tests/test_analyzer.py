@@ -1,8 +1,8 @@
 # work in progress
 import pytest
 import numpy as np
-from src.klarity.core.analyzer import EntropyAnalyzer
-from src.klarity.models import TokenInfo, UncertaintyAnalysisRequest
+from klarity.core.analyzer import EntropyAnalyzer
+from klarity.models import TokenInfo, UncertaintyAnalysisRequest
 
 
 @pytest.fixture
