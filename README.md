@@ -273,6 +273,9 @@ Currently supported:
 - ✅ Hugging Face Transformers
 -> Full uncertainty analysis with raw and semantic entropy metrics
 
+- ✅ vLLM
+-> Full uncertainty analysis with raw and semantic entropy metrics with max 20 logprobs per token
+
 - ✅ Together AI
 -> Uncertainty analysis with raw log prob. metrics
 

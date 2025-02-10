@@ -6,6 +6,7 @@ from together import Together
 from transformers import PreTrainedTokenizer, LogitsProcessor
 from .models import TokenInfo, UncertaintyMetrics, UncertaintyAnalysisResult
 from .core.analyzer import EntropyAnalyzer
+import math
 
 
 class UncertaintyLogitsProcessor(LogitsProcessor):
@@ -95,12 +96,45 @@ class UncertaintyEstimator:
         processor: Optional[LogitsProcessor] = None,
         prompt: Optional[str] = None,
     ) -> UncertaintyAnalysisResult:
-        """Analyze generation with available probability information"""
-        # Set default step to 0, this will be updated in the for loop
-        step = 0
         all_metrics = []
+        step = 0
+        
+        if hasattr(generation_output, 'outputs'):
+          generated_text = generation_output.outputs[0].text
+          logprobs_data = generation_output.outputs[0].logprobs
+          input_query = prompt or ""
 
-        if self.together_model:
+          if logprobs_data:
+              for token_data in logprobs_data:
+                  logprobs_items = [(token, logprob.logprob, logprob.decoded_token) 
+                                  for token, logprob in token_data.items()]
+                  logprobs_items.sort(key=lambda x: x[1], reverse=True)
+                  
+                  token_info = [
+                      TokenInfo(
+                          token=decoded_token,
+                          token_id=int(token_id),
+                          logit=logprob,
+                          probability=math.exp(logprob)
+                      )
+                      for token_id, logprob, decoded_token in logprobs_items[:self.top_k]
+                  ]
+                  
+                  if token_info:
+                      probs = np.array([t.probability for t in token_info])
+                      raw_entropy = self.analyzer._calculate_raw_entropy(probs) if self.analyzer else -np.sum(probs * np.log(probs))
+                      semantic_entropy = self.analyzer._calculate_semantic_entropy(token_info) if self.analyzer else 0.0
+
+                      metrics = UncertaintyMetrics(
+                          raw_entropy=raw_entropy,
+                          semantic_entropy=semantic_entropy,
+                          token_predictions=token_info,
+                      )
+                      all_metrics.append(metrics)
+
+              input_query = prompt or ""
+
+        elif self.together_model:
             generated_text = generation_output["text"]
             tokens = generation_output["tokens"]
             token_logprobs = generation_output["token_logprobs"]
