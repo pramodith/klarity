@@ -217,18 +217,12 @@ class UncertaintyEstimator:
         # Generate comprehensive insight based on model type
         if is_vlm:
             overall_insight = self.analyzer.generate_overall_insight(
-                all_metrics,
-                input_query=input_query,
-                generated_text=generated_text,
-                attention_data=attention_data
+                all_metrics, input_query=input_query, generated_text=generated_text, attention_data=attention_data
             )
         else:
             overall_insight = self.analyzer.generate_overall_insight(
-                all_metrics,
-                input_query=input_query,
-                generated_text=generated_text            
+                all_metrics, input_query=input_query, generated_text=generated_text
             )
-
 
         return UncertaintyAnalysisResult(
             token_metrics=all_metrics,
