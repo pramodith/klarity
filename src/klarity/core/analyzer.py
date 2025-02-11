@@ -14,8 +14,8 @@ import re
 import traceback
 import matplotlib.pyplot as plt
 import torch
-import torch.nn.functional as F
 from PIL import Image
+
 
 class EntropyAnalyzer:
     def __init__(
@@ -430,7 +430,6 @@ Return ONLY this exact JSON structure:
             return 0.0
 
 
-
 class VLMAnalyzer(EntropyAnalyzer):
     def __init__(
         self,
@@ -448,14 +447,14 @@ class VLMAnalyzer(EntropyAnalyzer):
             insight_model=insight_model,
             insight_tokenizer=insight_tokenizer,
             insight_api_key=insight_api_key,
-            insight_prompt_template=insight_prompt_template
+            insight_prompt_template=insight_prompt_template,
         )
-        
+
         # Then handle VLMAnalyzer-specific initialization
-        self.patch_size = getattr(vision_config, 'patch_size', None)
-        self.image_size = getattr(vision_config, 'image_size', None)
+        self.patch_size = getattr(vision_config, "patch_size", None)
+        self.image_size = getattr(vision_config, "image_size", None)
         self.use_cls_token = use_cls_token
-        
+
         # Template that uses {{ }} for literal curly braces in the JSON structure
         self.vlm_analysis_template = """Analyze the vision-language model output:
 
@@ -511,19 +510,15 @@ Return ONLY this exact JSON structure:
         self.patch_size = vision_config.patch_size
         self.image_size = vision_config.image_size
 
-
     def visualize_attention(
-        self,
-        attention_data: AttentionData,
-        image: Image.Image,
-        save_path: Optional[str] = None
+        self, attention_data: AttentionData, image: Image.Image, save_path: Optional[str] = None
     ) -> None:
         """Visualize attention patterns matching the Colab implementation"""
         try:
             # Calculate image dimensions and adjust extent
             img_width = image.width
             img_height = image.height
-            
+
             # Calculate offset to center the attention map (matching your Colab)
             width_offset = img_width * 0.07  # 7% offset as in your code
             height_offset = img_height * 0.07
@@ -555,15 +550,10 @@ Return ONLY this exact JSON structure:
                 # Create attention overlay with same parameters as your Colab
                 heatmap = plt.imshow(
                     attention_map,
-                    cmap='viridis',
+                    cmap="viridis",
                     alpha=0.7,
-                    interpolation='nearest',
-                    extent=[
-                        -width_offset, 
-                        img_width-width_offset,
-                        img_height+height_offset, 
-                        -height_offset
-                    ]
+                    interpolation="nearest",
+                    extent=[-width_offset, img_width - width_offset, img_height + height_offset, -height_offset],
                 )
 
                 plt.colorbar(heatmap, fraction=0.046, pad=0.04)
@@ -576,15 +566,15 @@ Return ONLY this exact JSON structure:
 
             # Save visualization
             if save_path:
-                plt.savefig(save_path, bbox_inches='tight', dpi=300)
+                plt.savefig(save_path, bbox_inches="tight", dpi=300)
                 print(f"Visualization saved to: {save_path}")
             else:
                 temp_dir = tempfile.gettempdir()
-                temp_path = os.path.join(temp_dir, 'attention_viz_temp.png')
-                plt.savefig(temp_path, bbox_inches='tight', dpi=300)
+                temp_path = os.path.join(temp_dir, "attention_viz_temp.png")
+                plt.savefig(temp_path, bbox_inches="tight", dpi=300)
                 print(f"Visualization saved to: {temp_path}")
 
-            plt.close('all')
+            plt.close("all")
 
         except Exception as e:
             print(f"Error during visualization: {str(e)}")
@@ -596,7 +586,7 @@ Return ONLY this exact JSON structure:
             raise ValueError("Vision config not set. Call set_vision_config with model's vision_config first.")
 
         num_patches = (self.image_size // self.patch_size) ** 2
-        grid_size = int(num_patches ** 0.5)
+        grid_size = int(num_patches**0.5)
         cumulative_attention = None
         token_attentions = []
 
@@ -605,7 +595,7 @@ Return ONLY this exact JSON structure:
                 # Extract attention for current token
                 if token_idx >= len(attention_tensors):
                     continue
-                    
+
                 step_attention = attention_tensors[token_idx]
                 step_attentions = []
 
@@ -613,7 +603,7 @@ Return ONLY this exact JSON structure:
                 for layer_attn in step_attention:
                     if isinstance(layer_attn, torch.Tensor):
                         # Get attention weights for image tokens
-                        image_attention = layer_attn[0, :, -1, :num_patches+1]
+                        image_attention = layer_attn[0, :, -1, : num_patches + 1]
                         step_attentions.append(image_attention.mean(dim=0))
 
                 if not step_attentions:
@@ -631,10 +621,7 @@ Return ONLY this exact JSON structure:
                 attention_grid = avg_attention.reshape(grid_size, grid_size)
 
                 # Store token-specific attention
-                token_attentions.append({
-                    "token": token,
-                    "attention_grid": attention_grid.cpu().numpy()
-                })
+                token_attentions.append({"token": token, "attention_grid": attention_grid.cpu().numpy()})
 
                 # Update cumulative attention
                 if cumulative_attention is None:
@@ -653,10 +640,7 @@ Return ONLY this exact JSON structure:
             if max_val > min_val:
                 cumulative_attention = (cumulative_attention - min_val) / (max_val - min_val)
 
-        return AttentionData(
-            cumulative_attention=cumulative_attention,
-            token_attentions=token_attentions
-        )
+        return AttentionData(cumulative_attention=cumulative_attention, token_attentions=token_attentions)
 
     def generate_overall_insight(
         self,
@@ -672,10 +656,7 @@ Return ONLY this exact JSON structure:
         # Format token metrics
         detailed_metrics = []
         for idx, metrics in enumerate(metrics_list):
-            top_predictions = [
-                f"{t.token} ({t.probability:.3f})" 
-                for t in metrics.token_predictions[:3]
-            ]
+            top_predictions = [f"{t.token} ({t.probability:.3f})" for t in metrics.token_predictions[:3]]
             step_metrics = (
                 f"Step {idx}:\n"
                 f"- Raw Entropy: {metrics.raw_entropy:.4f}\n"
@@ -691,9 +672,7 @@ Return ONLY this exact JSON structure:
                 token = attn["token"]
                 grid = attn["attention_grid"]
                 max_attention = np.max(grid)
-                attention_patterns.append(
-                    f"Token '{token}': Max attention {max_attention:.4f}"
-                )
+                attention_patterns.append(f"Token '{token}': Max attention {max_attention:.4f}")
 
         # Generate insight using template
         prompt = self.vlm_analysis_template.format(

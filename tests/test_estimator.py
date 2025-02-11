@@ -85,7 +85,7 @@ def test_analyze_generation(estimator, mock_tokenizer, sample_generation_output,
     logits_processor.captured_logits.append(torch.randn(1, 5))
 
     metrics_list = estimator.analyze_generation(
-        sample_generation_output, mock_tokenizer, logits_processor
+        sample_generation_output, tokenizer=mock_tokenizer, processor=logits_processor
     ).token_metrics
 
     assert len(metrics_list) == len(logits_processor.captured_logits)
@@ -97,7 +97,7 @@ def test_analyze_generation(estimator, mock_tokenizer, sample_generation_output,
 
 def test_empty_generation(estimator, mock_tokenizer, sample_generation_output, logits_processor):
     metrics_list = estimator.analyze_generation(
-        sample_generation_output, mock_tokenizer, logits_processor
+        sample_generation_output, tokenizer=mock_tokenizer, processor=logits_processor
     ).token_metrics
     assert len(metrics_list) == 0
 

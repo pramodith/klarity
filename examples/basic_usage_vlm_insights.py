@@ -1,6 +1,5 @@
 from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration, LogitsProcessorList
 from PIL import Image
-import torch
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import VLMAnalyzer
 import os
@@ -8,11 +7,7 @@ import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # Initialize VLM model
 model_id = "llava-hf/llava-onevision-qwen2-0.5b-ov-hf"
-model = LlavaOnevisionForConditionalGeneration.from_pretrained(
-    model_id,
-    output_attentions=True,
-    low_cpu_mem_usage=True
-)
+model = LlavaOnevisionForConditionalGeneration.from_pretrained(model_id, output_attentions=True, low_cpu_mem_usage=True)
 
 processor = AutoProcessor.from_pretrained(model_id)
 
@@ -23,8 +18,8 @@ estimator = UncertaintyEstimator(
         min_token_prob=0.01,
         insight_model="together:meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
         insight_api_key="your_api_key",
-        vision_config=model.config.vision_config, 
-        use_cls_token=True
+        vision_config=model.config.vision_config,
+        use_cls_token=True,
     ),
 )
 uncertainty_processor = estimator.get_logits_processor()
@@ -35,23 +30,11 @@ question = "How many engines does the plane have?"
 image = Image.open(image_path)
 
 # Prepare input with image and text
-conversation = [
-    {
-        "role": "user",
-        "content": [
-            {"type": "text", "text": question},
-            {"type": "image"}
-        ]
-    }
-]
+conversation = [{"role": "user", "content": [{"type": "text", "text": question}, {"type": "image"}]}]
 prompt = processor.apply_chat_template(conversation, add_generation_prompt=True)
 
 # Process inputs
-inputs = processor(
-    images=image,
-    text=prompt,
-    return_tensors='pt'
-)
+inputs = processor(images=image, text=prompt, return_tensors="pt")
 
 try:
     # Generate with uncertainty and attention analysis
@@ -65,23 +48,23 @@ try:
         return_dict_in_generate=True,
         output_scores=True,
         output_attentions=True,
-        use_cache=True
+        use_cache=True,
     )
 
     # Analyze the generation - Note the corrected parameter order
     result = estimator.analyze_generation(
         generation_output=generation_output,
-        model=model,                    # Add model parameter
-        tokenizer=processor,            # Changed from processor to tokenizer parameter
+        model=model,  # Add model parameter
+        tokenizer=processor,  # Changed from processor to tokenizer parameter
         processor=uncertainty_processor,
-        prompt=question
+        prompt=question,
     )
 
     # Get generated text using the processor instead of raw sequences
     input_length = inputs.input_ids.shape[1]
     generated_sequence = generation_output.sequences[0][input_length:]
     generated_text = processor.decode(generated_sequence, skip_special_tokens=True)
-    
+
     print(f"\nQuestion: {question}")
     print(f"Generated answer: {generated_text}")
 
@@ -99,9 +82,7 @@ try:
     if result.attention_data:
         print("\nAttention Analysis:")
         estimator.analyzer.visualize_attention(
-            result.attention_data,
-            image,
-            save_path="examples/attention_maps/attention_visualization.png"
+            result.attention_data, image, save_path="examples/attention_maps/attention_visualization.png"
         )
 
     # Show comprehensive insight
@@ -111,4 +92,5 @@ try:
 except Exception as e:
     print(f"Error during generation: {str(e)}")
     import traceback
+
     traceback.print_exc()  # Print full traceback for debugging

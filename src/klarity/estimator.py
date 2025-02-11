@@ -97,70 +97,71 @@ class UncertaintyEstimator:
         input_query = prompt or ""
 
         # Check if this is a VLM output
-        is_vlm = hasattr(generation_output, 'attentions') and isinstance(self.analyzer, VLMAnalyzer)
-        
-        if is_vlm:
-            if not hasattr(self.analyzer, 'patch_size') or self.analyzer.patch_size is None:
+        is_vlm = hasattr(generation_output, "attentions") and isinstance(self.analyzer, VLMAnalyzer)
 
+        if is_vlm:
+            if not hasattr(self.analyzer, "patch_size") or self.analyzer.patch_size is None:
                 self.analyzer.set_vision_config(model.config.vision_config)
             # Process VLM-specific outputs
-            input_length = processor.input_ids.shape[1] if hasattr(processor, 'input_ids') else 0
+            input_length = processor.input_ids.shape[1] if hasattr(processor, "input_ids") else 0
             generated_tokens = generation_output.sequences[0][input_length:]
             generated_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
-            
+
             # Get individual tokens
             tokens = []
             for i in range(len(generated_tokens)):
-                token_text = tokenizer.decode(generated_tokens[i:i+1], skip_special_tokens=True)
+                token_text = tokenizer.decode(generated_tokens[i : i + 1], skip_special_tokens=True)
                 if token_text.strip():
                     tokens.append(token_text)
-            
+
             # Process attention maps
-            attention_data = self.analyzer.process_attention_maps(
-                generation_output.attentions,
-                tokens
-            )
-            
+            attention_data = self.analyzer.process_attention_maps(generation_output.attentions, tokens)
+
             # Process token predictions as before
-            if hasattr(generation_output, 'scores'):
+            if hasattr(generation_output, "scores"):
                 for step, logits in enumerate(generation_output.scores):
                     token_info = self._process_logits(logits, tokenizer)
-                    
+
                     metrics = UncertaintyMetrics(
-                        raw_entropy=self.analyzer._calculate_raw_entropy(
-                            np.array([t.probability for t in token_info])
-                        ),
+                        raw_entropy=self.analyzer._calculate_raw_entropy(np.array([t.probability for t in token_info])),
                         semantic_entropy=self.analyzer._calculate_semantic_entropy(token_info),
                         token_predictions=token_info,
                     )
                     all_metrics.append(metrics)
-        
+
         else:
             # Handle VLLM outputs
-            if hasattr(generation_output, 'outputs'):
+            if hasattr(generation_output, "outputs"):
                 generated_text = generation_output.outputs[0].text
                 logprobs_data = generation_output.outputs[0].logprobs
 
                 if logprobs_data:
                     for token_data in logprobs_data:
-                        logprobs_items = [(token, logprob.logprob, logprob.decoded_token) 
-                                        for token, logprob in token_data.items()]
+                        logprobs_items = [
+                            (token, logprob.logprob, logprob.decoded_token) for token, logprob in token_data.items()
+                        ]
                         logprobs_items.sort(key=lambda x: x[1], reverse=True)
-                        
+
                         token_info = [
                             TokenInfo(
                                 token=decoded_token,
                                 token_id=int(token_id),
                                 logit=logprob,
-                                probability=math.exp(logprob)
+                                probability=math.exp(logprob),
                             )
-                            for token_id, logprob, decoded_token in logprobs_items[:self.top_k]
+                            for token_id, logprob, decoded_token in logprobs_items[: self.top_k]
                         ]
-                        
+
                         if token_info:
                             probs = np.array([t.probability for t in token_info])
-                            raw_entropy = self.analyzer._calculate_raw_entropy(probs) if self.analyzer else -np.sum(probs * np.log(probs))
-                            semantic_entropy = self.analyzer._calculate_semantic_entropy(token_info) if self.analyzer else 0.0
+                            raw_entropy = (
+                                self.analyzer._calculate_raw_entropy(probs)
+                                if self.analyzer
+                                else -np.sum(probs * np.log(probs))
+                            )
+                            semantic_entropy = (
+                                self.analyzer._calculate_semantic_entropy(token_info) if self.analyzer else 0.0
+                            )
 
                             metrics = UncertaintyMetrics(
                                 raw_entropy=raw_entropy,
@@ -214,15 +215,17 @@ class UncertaintyEstimator:
                     all_metrics.append(metrics)
 
         # Generate comprehensive insight based on model type
-        overall_insight = self.analyzer.generate_overall_insight(
-            all_metrics,
-            input_query=input_query,
-            generated_text=generated_text,
-            attention_data=attention_data if is_vlm else None
-        )
+        if is_vlm:
+            overall_insight = self.analyzer.generate_overall_insight(
+                all_metrics, input_query=input_query, generated_text=generated_text, attention_data=attention_data
+            )
+        else:
+            overall_insight = self.analyzer.generate_overall_insight(
+                all_metrics, input_query=input_query, generated_text=generated_text
+            )
 
         return UncertaintyAnalysisResult(
             token_metrics=all_metrics,
             overall_insight=overall_insight,
-            attention_data=attention_data if is_vlm else None
+            attention_data=attention_data if is_vlm else None,
         )

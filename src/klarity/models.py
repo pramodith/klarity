@@ -13,6 +13,7 @@ class TokenInfo(BaseModel):
 
 class AttentionData(BaseModel):
     """Model for VLM attention patterns"""
+
     cumulative_attention: Optional[Any] = None  # numpy array of attention weights
     token_attentions: Optional[List[Dict[str, Any]]] = None  # List of per-token attention data
 
