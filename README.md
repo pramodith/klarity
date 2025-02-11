@@ -466,6 +466,7 @@ Planned support:
 | Qwen2.5-7B | Base | ✅ Tested | Full Support |
 | Qwen2.5-7B-Instruct | Instruct | ✅ Tested | Full Support |
 | Llama-3.2-3B-Instruct | Instruct | ✅ Tested | Full Support |
+| Meta-Llama-3-8B | Base | ✅ Tested | Together API Insights |
 | gemma-2-2b-it | Instruct  | ✅ Tested | Full Support |
 | mistralai/Mistral-7B-Instruct-v0.3| Instruct | ✅ Tested | Together API Insights |
 | Qwen/Qwen2.5-72B-Instruct-Turbo | Instruct | ✅ Tested | Together API Insights |  
