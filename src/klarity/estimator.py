@@ -5,7 +5,8 @@ import numpy as np
 from together import Together
 from transformers import PreTrainedTokenizer, LogitsProcessor
 from .models import TokenInfo, UncertaintyMetrics, UncertaintyAnalysisResult
-from .core.analyzer import EntropyAnalyzer
+from .core.analyzer import EntropyAnalyzer, VLMAnalyzer
+import math
 
 
 class UncertaintyLogitsProcessor(LogitsProcessor):
@@ -13,9 +14,7 @@ class UncertaintyLogitsProcessor(LogitsProcessor):
         self.captured_logits = []
         self.estimator = estimator
 
-    def __call__(
-        self, input_ids: torch.LongTensor, scores: torch.FloatTensor
-    ) -> torch.FloatTensor:
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         self.captured_logits.append(scores.detach().clone())
         return scores
 
@@ -31,18 +30,14 @@ class UncertaintyEstimator:
         self.analyzer = analyzer
         # max log probs provided by the api
         self.top_k = 5 if together_model else top_k
-        self.together_client = (
-            Together(api_key=together_api_key) if together_api_key else None
-        )
+        self.together_client = Together(api_key=together_api_key) if together_api_key else None
         self.together_model = together_model
 
     def get_logits_processor(self) -> LogitsProcessor:
         """Get appropriate logits processor based on model type"""
         return UncertaintyLogitsProcessor(self)
 
-    def _process_logits(
-        self, logits: torch.Tensor, tokenizer: PreTrainedTokenizer
-    ) -> List[TokenInfo]:
+    def _process_logits(self, logits: torch.Tensor, tokenizer: PreTrainedTokenizer) -> List[TokenInfo]:
         """Process HuggingFace logits into TokenInfo objects"""
         probs = torch.softmax(logits, dim=-1)
         top_probs, top_indices = torch.topk(probs[0], self.top_k)
@@ -91,79 +86,146 @@ class UncertaintyEstimator:
     def analyze_generation(
         self,
         generation_output: Any,
+        model: Optional[Any] = None,
         tokenizer: Optional[PreTrainedTokenizer] = None,
         processor: Optional[LogitsProcessor] = None,
         prompt: Optional[str] = None,
     ) -> UncertaintyAnalysisResult:
-        """Analyze generation with available probability information"""
-        # Set default step to 0, this will be updated in the for loop
-        step = 0
         all_metrics = []
+        generated_text = ""
+        attention_data = None
+        input_query = prompt or ""
 
-        if self.together_model:
-            generated_text = generation_output["text"]
-            tokens = generation_output["tokens"]
-            token_logprobs = generation_output["token_logprobs"]
-            token_ids = generation_output["token_ids"]
+        # Check if this is a VLM output
+        is_vlm = hasattr(generation_output, "attentions") and isinstance(self.analyzer, VLMAnalyzer)
 
-            for step in range(len(tokens)):
-                prob = self._process_together_logprob(token_logprobs[step])
-                uncertainty_score = 1 - prob  # Higher score = more uncertain
+        if is_vlm:
+            if not hasattr(self.analyzer, "patch_size") or self.analyzer.patch_size is None:
+                self.analyzer.set_vision_config(model.config.vision_config)
+            # Process VLM-specific outputs
+            input_length = processor.input_ids.shape[1] if hasattr(processor, "input_ids") else 0
+            generated_tokens = generation_output.sequences[0][input_length:]
+            generated_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
-                token_info = [
-                    TokenInfo(
-                        token=tokens[step],
-                        token_id=token_ids[step],
-                        logit=token_logprobs[step],
-                        probability=prob,
+            # Get individual tokens
+            tokens = []
+            for i in range(len(generated_tokens)):
+                token_text = tokenizer.decode(generated_tokens[i : i + 1], skip_special_tokens=True)
+                if token_text.strip():
+                    tokens.append(token_text)
+
+            # Process attention maps
+            attention_data = self.analyzer.process_attention_maps(generation_output.attentions, tokens)
+
+            # Process token predictions as before
+            if hasattr(generation_output, "scores"):
+                for step, logits in enumerate(generation_output.scores):
+                    token_info = self._process_logits(logits, tokenizer)
+
+                    metrics = UncertaintyMetrics(
+                        raw_entropy=self.analyzer._calculate_raw_entropy(np.array([t.probability for t in token_info])),
+                        semantic_entropy=self.analyzer._calculate_semantic_entropy(token_info),
+                        token_predictions=token_info,
                     )
-                ]
-
-                metrics = UncertaintyMetrics(
-                    raw_entropy=uncertainty_score,
-                    semantic_entropy=0.0,
-                    token_predictions=token_info,
-                )
-                all_metrics.append(metrics)
-
-            input_query = prompt or ""
+                    all_metrics.append(metrics)
 
         else:
-            # HuggingFace processing
-            if not tokenizer or not processor:
-                raise ValueError(
-                    "Tokenizer and processor required for HuggingFace models"
-                )
+            # Handle VLLM outputs
+            if hasattr(generation_output, "outputs"):
+                generated_text = generation_output.outputs[0].text
+                logprobs_data = generation_output.outputs[0].logprobs
 
-            generated_text = tokenizer.decode(
-                generation_output.sequences[0], skip_special_tokens=True
+                if logprobs_data:
+                    for token_data in logprobs_data:
+                        logprobs_items = [
+                            (token, logprob.logprob, logprob.decoded_token) for token, logprob in token_data.items()
+                        ]
+                        logprobs_items.sort(key=lambda x: x[1], reverse=True)
+
+                        token_info = [
+                            TokenInfo(
+                                token=decoded_token,
+                                token_id=int(token_id),
+                                logit=logprob,
+                                probability=math.exp(logprob),
+                            )
+                            for token_id, logprob, decoded_token in logprobs_items[: self.top_k]
+                        ]
+
+                        if token_info:
+                            probs = np.array([t.probability for t in token_info])
+                            raw_entropy = (
+                                self.analyzer._calculate_raw_entropy(probs)
+                                if self.analyzer
+                                else -np.sum(probs * np.log(probs))
+                            )
+                            semantic_entropy = (
+                                self.analyzer._calculate_semantic_entropy(token_info) if self.analyzer else 0.0
+                            )
+
+                            metrics = UncertaintyMetrics(
+                                raw_entropy=raw_entropy,
+                                semantic_entropy=semantic_entropy,
+                                token_predictions=token_info,
+                            )
+                            all_metrics.append(metrics)
+
+            # Handle Together API outputs
+            elif self.together_model:
+                generated_text = generation_output["text"]
+                tokens = generation_output["tokens"]
+                token_logprobs = generation_output["token_logprobs"]
+                token_ids = generation_output["token_ids"]
+
+                for step in range(len(tokens)):
+                    prob = self._process_together_logprob(token_logprobs[step])
+                    uncertainty_score = 1 - prob
+
+                    token_info = [
+                        TokenInfo(
+                            token=tokens[step],
+                            token_id=token_ids[step],
+                            logit=token_logprobs[step],
+                            probability=prob,
+                        )
+                    ]
+
+                    metrics = UncertaintyMetrics(
+                        raw_entropy=uncertainty_score,
+                        semantic_entropy=0.0,
+                        token_predictions=token_info,
+                    )
+                    all_metrics.append(metrics)
+
+            # Handle HuggingFace outputs
+            else:
+                if not tokenizer or not processor:
+                    raise ValueError("Tokenizer and processor required for HuggingFace models")
+
+                generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
+
+                for step, logits in enumerate(processor.captured_logits):
+                    token_info = self._process_logits(logits, tokenizer)
+
+                    metrics = UncertaintyMetrics(
+                        raw_entropy=self.analyzer._calculate_raw_entropy(np.array([t.probability for t in token_info])),
+                        semantic_entropy=self.analyzer._calculate_semantic_entropy(token_info),
+                        token_predictions=token_info,
+                    )
+                    all_metrics.append(metrics)
+
+        # Generate comprehensive insight based on model type
+        if is_vlm:
+            overall_insight = self.analyzer.generate_overall_insight(
+                all_metrics, input_query=input_query, generated_text=generated_text, attention_data=attention_data
             )
-
-            for step, logits in enumerate(processor.captured_logits):
-                token_info = self._process_logits(logits, tokenizer)
-
-                metrics = UncertaintyMetrics(
-                    raw_entropy=self.analyzer._calculate_raw_entropy(
-                        np.array([t.probability for t in token_info])
-                    ),
-                    semantic_entropy=self.analyzer._calculate_semantic_entropy(
-                        token_info
-                    ),
-                    token_predictions=token_info,
-                )
-                all_metrics.append(metrics)
-
-            input_query = generated_text[:step]
-
-        # Generate overall insight using existing analyzer
-        overall_insight = (
-            self.analyzer.generate_overall_insight(
+        else:
+            overall_insight = self.analyzer.generate_overall_insight(
                 all_metrics, input_query=input_query, generated_text=generated_text
             )
-            if self.analyzer
-            else None
-        )
 
         return UncertaintyAnalysisResult(
-            token_metrics=all_metrics, overall_insight=overall_insight
+            token_metrics=all_metrics,
+            overall_insight=overall_insight,
+            attention_data=attention_data if is_vlm else None,
         )

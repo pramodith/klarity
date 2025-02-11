@@ -17,8 +17,7 @@ dependencies = [
     "scipy>=1.0.0",
     "pydantic>=2.0.0",
     "together==1.4.0",
-    "python-dotenv>=1.0.1",
-    "openai>=1.61.1",
+    "matplotlib>=3.9.4",
 ]
 
 [project.urls]

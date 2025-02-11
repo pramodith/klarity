@@ -6,7 +6,7 @@ from klarity.core.analyzer import EntropyAnalyzer
 
 
 class MockTokenizer:
-    def decode(self, token_id):
+    def decode(self, token_id, **kwargs):
         return f"token_{token_id}"
 
 
@@ -41,13 +41,9 @@ def sample_generation_output():
 
 
 def test_init():
-    estimator = UncertaintyEstimator(
-        top_k=100, analyzer=EntropyAnalyzer(min_token_prob=0.02)
-    )
+    estimator = UncertaintyEstimator(top_k=100, analyzer=EntropyAnalyzer(min_token_prob=0.02))
     assert estimator.top_k == 100, "top_k should be 100"
-    assert isinstance(estimator.analyzer, EntropyAnalyzer), (
-        "analyzer should be an instance of EntropyAnalyzer"
-    )
+    assert isinstance(estimator.analyzer, EntropyAnalyzer), "analyzer should be an instance of EntropyAnalyzer"
 
     custom_analyzer = EntropyAnalyzer(min_token_prob=0.02)
     estimator = UncertaintyEstimator(top_k=50, analyzer=custom_analyzer)
@@ -83,15 +79,13 @@ def test_process_logits(
     assert 0.99 <= total_prob <= 1.01
 
 
-def test_analyze_generation(
-    estimator, mock_tokenizer, sample_generation_output, logits_processor
-):
+def test_analyze_generation(estimator, mock_tokenizer, sample_generation_output, logits_processor):
     # Add some sample logits
     logits_processor.captured_logits.append(torch.randn(1, 5))
     logits_processor.captured_logits.append(torch.randn(1, 5))
 
     metrics_list = estimator.analyze_generation(
-        sample_generation_output, mock_tokenizer, logits_processor
+        sample_generation_output, tokenizer=mock_tokenizer, processor=logits_processor
     ).token_metrics
 
     assert len(metrics_list) == len(logits_processor.captured_logits)
@@ -101,11 +95,9 @@ def test_analyze_generation(
         assert len(metrics.token_predictions) == estimator.top_k
 
 
-def test_empty_generation(
-    estimator, mock_tokenizer, sample_generation_output, logits_processor
-):
+def test_empty_generation(estimator, mock_tokenizer, sample_generation_output, logits_processor):
     metrics_list = estimator.analyze_generation(
-        sample_generation_output, mock_tokenizer, logits_processor
+        sample_generation_output, tokenizer=mock_tokenizer, processor=logits_processor
     ).token_metrics
     assert len(metrics_list) == 0
 

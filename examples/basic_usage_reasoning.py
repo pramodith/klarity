@@ -48,9 +48,7 @@ result = estimator.analyze_generation(
 )
 
 # Get generated text
-generated_text = tokenizer.decode(
-    generation_output.sequences[0], skip_special_tokens=True
-)
+generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
 print(f"\nPrompt: {prompt}")
 print(f"Generated text: {generated_text}")
 

@@ -1,4 +1,4 @@
-# together_wrapper.py
+# core/together_wrapper.py
 from typing import Optional
 from together import Together
 
