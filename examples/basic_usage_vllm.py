@@ -17,13 +17,7 @@ estimator = UncertaintyEstimator(
 )
 
 prompt = "What is the capital of France?"
-sampling_params = SamplingParams(
-    temperature=0.7,
-    top_p=0.9,
-    max_tokens=20,
-    logprobs=5,
-    prompt_logprobs=5
-)
+sampling_params = SamplingParams(temperature=0.7, top_p=0.9, max_tokens=20, logprobs=5, prompt_logprobs=5)
 
 outputs = llm.generate([prompt], sampling_params)
 output = outputs[0]  # Get first output since we only sent one prompt
@@ -32,11 +26,7 @@ output = outputs[0]  # Get first output since we only sent one prompt
 completion = output.outputs[0]
 generated_text = completion.text
 
-result = estimator.analyze_generation(
-    output,
-    tokenizer=tokenizer,
-    prompt=prompt
-)
+result = estimator.analyze_generation(output, tokenizer=tokenizer, prompt=prompt)
 
 print(f"Prompt: {prompt}")
 print(f"Generated text: {generated_text}")
