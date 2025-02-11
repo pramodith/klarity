@@ -19,10 +19,11 @@
 
 ## 🎯 Overview
 
-Klarity is a toolkit for inspecting and debugging AI decision-making processes. By combining uncertainty analysis with reasoning insights, it helps you understand how models think and fix issues before they reach production.
+Klarity is a toolkit for inspecting and debugging AI decision-making processes. By combining uncertainty analysis with reasoning insights and visual attention patterns, it helps you understand how models think and fix issues before they reach production.
 
 - **Dual Entropy Analysis**: Measure model confidence through raw entropy and semantic similarity metrics
 - **Reasoning Analysis**: Extract and evaluate step-by-step thinking patterns in model outputs
+- **Visual Attention Analysis**: Visualize and analyze how vision-language models attend to images
 - **Semantic Clustering**: Group similar predictions to reveal decision-making pathways
 - **Structured Insights**: Get detailed JSON analysis of both uncertainty patterns and reasoning steps
 - **AI-powered Report**: Leverage capable models to interpret generation patterns and provide human-readable insights
