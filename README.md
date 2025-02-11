@@ -462,9 +462,13 @@ Planned support:
 |-------|------|--------|--------|
 | Qwen2.5-0.5B | Base | ✅ Tested | Full Support |
 | Qwen2.5-0.5B-Instruct | Instruct | ✅ Tested | Full Support |
+| Qwen2.5-1.5B-Instruct | Instruct | ✅ Tested | Full Support |
 | Qwen2.5-7B | Base | ✅ Tested | Full Support |
 | Qwen2.5-7B-Instruct | Instruct | ✅ Tested | Full Support |
 | Llama-3.2-3B-Instruct | Instruct | ✅ Tested | Full Support |
+| gemma-2-2b-it | Instruct  | ✅ Tested | Full Support |
+| mistralai/Mistral-7B-Instruct-v0.3| Instruct | ✅ Tested | Together API Insights |
+| Qwen/Qwen2.5-72B-Instruct-Turbo | Instruct | ✅ Tested | Together API Insights |  
 | DeepSeek-R1-Distill-Qwen-1.5B | Reasoning | ✅ Tested | Together API Insights |
 | DeepSeek-R1-Distill-Qwen-7B | Reasoning | ✅ Tested | Together API Insights |
 | Llava-onevision-qwen2-0.5b-ov-hf | Vision | ✅ Tested | Together API Insights |
