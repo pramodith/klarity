@@ -2,6 +2,7 @@ import os
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
+from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
 
 class HFInferenceClient:
@@ -64,6 +65,30 @@ class HFInferenceClient:
 
         for message in chat_completion.choices:
             print(message.message.content, end = "")
+
+class VLLMClient:
+
+    def __init__(self):
+        self.model = LLM(
+            "simplescaling/s1.1-32B",
+            tensor_parallel_size=2,
+        )
+
+        self.tokenizer = AutoTokenizer.from_pretrained("simplescaling/s1-32B")
+        self.stop_token_ids = tok("<|im_end|>")["input_ids"]
+
+    def query(self, prompt: str, min_tokens: int = 0, max_tokens: int = 32768):
+        sampling_params = SamplingParams(
+            max_tokens=max_tokens,
+            min_tokens=min_tokens,
+            stop_token_ids=stop_token_ids,
+        )
+
+        prompt = "How many r in raspberry"
+        prompt = "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n" + prompt + "<|im_end|>\n<|im_start|>assistant\n"
+
+        o = model.generate(prompt, sampling_params=sampling_params)
+        print(o[0].outputs[0].text)
 
 # Example usage
 if __name__ == "__main__":
