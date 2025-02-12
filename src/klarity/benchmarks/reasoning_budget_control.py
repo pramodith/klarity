@@ -143,21 +143,23 @@ class VLLMClient:
         generated_texts = []
         num_generated_tokens = []
 
-        o = self.model.generate(query, sampling_params=sampling_params)
+        sampling_params = SamplingParams(
+            max_tokens=max_tokens,
+            min_tokens=0,
+            stop_token_ids=stop_token_ids,
+        )
 
         for wait_ind in range(num_waits+1):
-            gt, nt = self.get_vllm_output(o[0])
-            generated_texts.append(gt)
-            num_generated_tokens.append(nt)
-            # Force reflection by adding another wait
-            updated_prompt = prompt + gt + self.WAIT_STR
             if wait_ind == num_waits - 1:
                 sampling_params.stop_token_ids = stop_token_ids
-            o = self.model.generate(updated_prompt, sampling_params=sampling_params)
-        
-        gt, nt = self.get_vllm_output(o[0])
-        generated_texts.append(gt)
-        num_generated_tokens.append(nt)
+
+            o = self.model.generate(prompt, sampling_params=sampling_params)
+            gt, nt = self.get_vllm_output(o[0])
+            # Force reflection by adding another wait
+            prompt += gt + self.WAIT_STR
+            generated_texts.append(gt)
+            num_generated_tokens.append(nt)
+            
 
         with open(f"generated_texts_{num_waits}.txt", "w") as f:
             f.write("||".join(generated_texts))
