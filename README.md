@@ -6,7 +6,7 @@
 
   # Klarity 
 
-**Generative AI Toolkit: Automated Explainability, Error Mitigation & Multi-Model Support**
+**Generative AI Toolkit: Automated Explainability, Error Mitigation & Multi-Modal Support**
     <br>
     <br>
     🖼️ **Update 12/02 support integration for VLM and visual attention monitoring**
