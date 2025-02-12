@@ -68,7 +68,7 @@ class HFInferenceClient:
 
 class VLLMClient:
 
-    def __init__(self, model:str = "simplescaling/s1.1-32B", tensor_parallel_size: int = 2):
+    def __init__(self, model:str = "agentica-org/DeepScaleR-1.5B-Preview", tensor_parallel_size: int = 1):
         self.model = LLM(
             model,
             tensor_parallel_size=tensor_parallel_size,
@@ -103,13 +103,16 @@ class VLLMClient:
 
 # Example usage
 if __name__ == "__main__":
-    client = HFInferenceClient("https://p61e4xep6f1oyhp6.us-east-1.aws.endpoints.huggingface.cloud/v1")
-    prompt = "How many r in raspberry"
+    # client = HFInferenceClient("https://p61e4xep6f1oyhp6.us-east-1.aws.endpoints.huggingface.cloud/v1")
+    # prompt = "How many r in raspberry"
 
-    try:
-        result = client.query(
-            prompt,
-        )
-        print(result)
-    except Exception as e:
-        print(f"Error: {e}")
+    # try:
+    #     result = client.query(
+    #         prompt,
+    #     )
+    #     print(result)
+    # except Exception as e:
+    #     print(f"Error: {e}")
+
+    vllm_client = VLLMClient()
+    vllm_client.query("How many r in raspberry")
