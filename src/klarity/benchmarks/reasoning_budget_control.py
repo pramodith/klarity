@@ -68,16 +68,27 @@ class HFInferenceClient:
 
 class VLLMClient:
 
-    def __init__(self):
+    def __init__(self, model:str = "simplescaling/s1.1-32B", tensor_parallel_size: int = 2):
         self.model = LLM(
-            "simplescaling/s1.1-32B",
-            tensor_parallel_size=2,
+            model,
+            tensor_parallel_size=tensor_parallel_size,
+            enable_prefix_caching=True
         )
 
         self.tokenizer = AutoTokenizer.from_pretrained("simplescaling/s1-32B")
-        self.stop_token_ids = tok("<|im_end|>")["input_ids"]
-
+        self.stop_token_ids = tok("<|pad|>")["input_ids"]
     def query(self, prompt: str, min_tokens: int = 0, max_tokens: int = 32768):
+        """
+        Query the model with the given prompt.
+
+        Args:
+        - prompt (str): The prompt to generate text for.
+        - min_tokens (int, optional): The minimum number of tokens to generate. Defaults to 0.
+        - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 32768.
+
+        Returns:
+        - str: The generated text.
+        """
         sampling_params = SamplingParams(
             max_tokens=max_tokens,
             min_tokens=min_tokens,
