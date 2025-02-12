@@ -68,6 +68,7 @@ class HFInferenceClient:
 
 class VLLMClient:
 
+    WAIT_STR: str = "Wait, "
     def __init__(self, model:str = "agentica-org/DeepScaleR-1.5B-Preview", tensor_parallel_size: int = 1):
         self.model = LLM(
             model,
@@ -104,15 +105,66 @@ class VLLMClient:
         sampling_params = SamplingParams(
             max_tokens=max_tokens,
             min_tokens=min_tokens,
-            stop_token_ids=self.tokenizer("</think>")["input_ids"]
+            # stop_token_ids=self.tokenizer("</think>")["input_ids"]
         )
 
-        o = self.model.generate(prompt, sampling_params=sampling_params)
+        o = self.model.generate(query, sampling_params=sampling_params)
         num_generated_tokens = [len(o[i].outputs[0].token_ids) for i in range(len(o))]
         print(f"Average number of tokens: {sum(num_generated_tokens) / len(num_generated_tokens)}")
         final_answers = [self.extract_answer(o[i].outputs[0].text) for i in range(len(o))]
-        # print(o[0].outputs[0].text)
+        print(o[0].outputs[0].text)
         return num_generated_tokens, final_answers
+    
+    def get_vllm_output(self, output_generation):
+        generated_text = output_generation.outputs[0].text
+        num_generated_tokens = len(output_generation.outputs[0].token_ids)
+        return generated_text, num_generated_tokens
+
+    def query_with_extra_wait(self, query: str, num_waits: int = 1, max_tokens: int = 32768):
+        """
+        Query the model with the given prompt.
+
+        Args:
+        - prompt (str): The prompt to generate text for.
+        - min_tokens (int, optional): The minimum number of tokens to generate. Defaults to 0.
+        - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 32768.
+
+        Returns:
+        - str: The generated text.
+        """
+
+        if num_waits < 0:
+            raise ValueError("num_waits must be non-negative")
+        elif num_waits == 0:
+            stop_token_ids = None
+        else:
+            stop_token_ids = self.tokenizer("</think>")["input_ids"]
+
+        generated_texts = []
+        num_generated_tokens = []
+
+        o = self.model.generate(query, sampling_params=sampling_params)
+
+        for wait_ind in range(num_waits+1):
+            gt, nt = self.get_vllm_output(o[0])
+            generated_texts.append(gt)
+            num_generated_tokens.append(nt)
+            # Force reflection by adding another wait
+            updated_prompt = prompt + gt + self.WAIT_STR
+            if wait_ind == num_waits - 1:
+                sampling_params.stop_token_ids = stop_token_ids
+            o = self.model.generate(updated_prompt, sampling_params=sampling_params)
+        
+        gt, nt = self.get_vllm_output(o[0])
+        generated_texts.append(gt)
+        num_generated_tokens.append(nt)
+
+        with open(f"generated_texts_{num_waits}.txt", "w") as f:
+            f.write("||".join(generated_texts))
+
+        # Get the entire generated text and the total generated token count
+        return " ".join(generated_texts), sum(num_generated_tokens)
+
 
 # Example usage
 if __name__ == "__main__":
@@ -130,4 +182,5 @@ if __name__ == "__main__":
     vllm_client = VLLMClient()
     query = "How many r in raspberry"
     prompt = vllm_client.add_system_prompt(query)
-    result = vllm_client.query([prompt])
+    generated_response, total_generated_tokens = vllm_client.query_with_extra_wait(prompt, 1)
+    print(generated_response)
