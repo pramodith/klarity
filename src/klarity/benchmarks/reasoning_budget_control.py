@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 from vllm import LLM, SamplingParams
@@ -72,12 +72,18 @@ class VLLMClient:
         self.model = LLM(
             model,
             tensor_parallel_size=tensor_parallel_size,
-            enable_prefix_caching=True
+            enable_prefix_caching=True,
+            dtype="bfloat16",
         )
 
-        self.tokenizer = AutoTokenizer.from_pretrained("simplescaling/s1-32B")
-        self.stop_token_ids = tok("<|pad|>")["input_ids"]
-    def query(self, prompt: str, min_tokens: int = 0, max_tokens: int = 32768):
+        self.tokenizer = AutoTokenizer.from_pretrained(model)
+    
+    def add_system_prompt(self, prompt: str):
+        prompt = "How many r in raspberry"
+        prompt = f"{self.tokenizer.bos_token}You are a helpful assistant. Solve the following problem: " + prompt + 
+        return prompt
+
+    def query(self, query: List[str], min_tokens: int = 0, max_tokens: int = 32768):
         """
         Query the model with the given prompt.
 
@@ -92,14 +98,14 @@ class VLLMClient:
         sampling_params = SamplingParams(
             max_tokens=max_tokens,
             min_tokens=min_tokens,
-            stop_token_ids=stop_token_ids,
+            stop_token_ids=self.tokenizer("</think>")["input_ids"]
         )
 
-        prompt = "How many r in raspberry"
-        prompt = "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n" + prompt + "<|im_end|>\n<|im_start|>assistant\n"
-
-        o = model.generate(prompt, sampling_params=sampling_params)
+        o = self.model.generate(prompt, sampling_params=sampling_params)
+        num_generated_tokens = [len(o[i].outputs[0].token_ids) for i in range(len(o))]
+        print(f"Average number of tokens: {sum(num_generated_tokens) / len(num_generated_tokens)}")
         print(o[0].outputs[0].text)
+        return num_generated_tokens
 
 # Example usage
 if __name__ == "__main__":
@@ -115,4 +121,6 @@ if __name__ == "__main__":
     #     print(f"Error: {e}")
 
     vllm_client = VLLMClient()
-    vllm_client.query("How many r in raspberry")
+    query = "How many r in raspberry"
+    prompt = vllm_client.add_system_prompt(query)
+    result = vllm_client.query([prompt])
