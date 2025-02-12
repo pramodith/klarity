@@ -80,8 +80,14 @@ class VLLMClient:
     
     def add_system_prompt(self, prompt: str):
         prompt = "How many r in raspberry"
-        prompt = f"{self.tokenizer.bos_token}You are a helpful assistant. Solve the following problem: " + prompt + 
+        prompt = f"You are a helpful assistant."\
+            "Please reason step by step, and put your final answer within \\boxed\{\}."\
+            "Solve the following problem:"\
+            +prompt+" <think>\n"
         return prompt
+    
+    def extract_answer(self, text: str):
+        return text[text.find("\\boxed\\{"):text.find("}")+1]
 
     def query(self, query: List[str], min_tokens: int = 0, max_tokens: int = 32768):
         """
@@ -104,8 +110,9 @@ class VLLMClient:
         o = self.model.generate(prompt, sampling_params=sampling_params)
         num_generated_tokens = [len(o[i].outputs[0].token_ids) for i in range(len(o))]
         print(f"Average number of tokens: {sum(num_generated_tokens) / len(num_generated_tokens)}")
-        print(o[0].outputs[0].text)
-        return num_generated_tokens
+        final_answers = [self.extract_answer(o[i].outputs[0].text) for i in range(len(o))]
+        # print(o[0].outputs[0].text)
+        return num_generated_tokens, final_answers
 
 # Example usage
 if __name__ == "__main__":
