@@ -15,6 +15,8 @@ import traceback
 import matplotlib.pyplot as plt
 import torch
 from PIL import Image
+import base64
+import io
 
 
 class EntropyAnalyzer:
@@ -683,3 +685,222 @@ Return ONLY this exact JSON structure:
         )
 
         return self.together_model.generate_insight(prompt)
+
+
+
+
+# analyze images with VLM
+class EnhancedVLMAnalyzer(VLMAnalyzer):
+    def __init__(
+        self,
+        vision_config: Optional[Any] = None,
+        use_cls_token: bool = True,
+        min_token_prob: float = 0.01,
+        insight_model: Optional[Any] = None,
+        insight_tokenizer: Optional[Any] = None,
+        insight_api_key: Optional[str] = None,
+        insight_prompt_template: Optional[str] = None,
+    ):
+        super().__init__(
+            vision_config=vision_config,
+            use_cls_token=use_cls_token,
+            min_token_prob=min_token_prob,
+            insight_model=insight_model,
+            insight_tokenizer=insight_tokenizer,
+            insight_api_key=insight_api_key,
+            insight_prompt_template=insight_prompt_template
+        )
+        
+        # Initialize TogetherModelWrapper if insight_model is provided
+        if isinstance(insight_model, str) and insight_api_key:
+            if insight_model.startswith("together:"):
+                model_name = insight_model.replace("together:", "")
+                self.together_model = TogetherModelWrapper(
+                    model_name=model_name,
+                    api_key=insight_api_key
+                )
+        else:
+            self.together_model = None
+
+        self.visual_analysis_template = """Evaluate the AI's image understanding using the provided data:
+
+What was asked: {input_query}
+What the AI answered: {generated_text}
+
+Uncertainty Details:
+{detailed_metrics}
+
+Where the AI looked (attention):
+{attention_patterns}
+• Warm colors = More focus areas
+
+Return only a JSON with this structure:
+{{
+    "scores": {{
+        "overall_uncertainty": "<0-1>",
+        "visual_grounding": "<0-1>",  // Image-text match quality
+        "confidence": "<0-1>"         // Answer certainty
+    }},
+    "visual_analysis": {{
+        "attention_quality": {{       // How well focus matched the task
+            "score": "<0-1>",
+            "key_regions": ["<main area 1>", "<main area 2>"],
+            "missed_regions": ["<ignored area 1>", "<ignored area 2>"]
+        }},
+        "token_attention_alignment": [  // Word vs focus match
+            {{
+                "word": "<token>",
+                "focused_spot": "<region>",
+                "relevance": "<0-1>",   // How related to answer
+                "uncertainty": "<0-1>"  // Word-level doubt
+            }}
+        ]
+    }},
+    "uncertainty_analysis": {{
+        "problem_spots": [  // High-doubt sections
+            {{
+                "text": "<text part>",
+                "reason": "<why uncertain>",
+                "looked_at": "<image area>",
+                "connection": "<focus vs doubt link>"
+            }}
+        ],
+        "improvement_tips": [  // How to do better
+            {{
+                "area": "<what to fix>",
+                "tip": "<how to fix>"
+            }}
+        ]
+    }}
+}}"""
+
+    def _encode_image_to_base64(self, image: Image.Image) -> str:
+        """Convert PIL Image to base64 string"""
+        import io
+        import base64
+        
+        buffered = io.BytesIO()
+        image.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode()
+
+    def _create_attention_visualization(
+        self,
+        image: Image.Image,
+        attention_data: AttentionData,
+    ) -> Image.Image:
+        """Create visualization of attention overlay and return as PIL Image"""
+        import tempfile
+        import os
+        
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+            # Uses the parent class's visualize_attention method to create the overlay
+            self.visualize_attention(attention_data, image, tmp_file.name)
+            viz_image = Image.open(tmp_file.name)
+            os.unlink(tmp_file.name)
+            return viz_image
+
+    def generate_visual_insight(
+        self,
+        metrics_list: List[UncertaintyMetrics],
+        image: Image.Image,
+        attention_data: AttentionData,
+        input_query: str,
+        generated_text: str,
+    ) -> Dict[str, Any]:
+        """Generate insight using the model with attention visualization"""
+        if not self.together_model:
+            raise ValueError("No insight model configured")
+
+        try:
+            # Format token metrics
+            detailed_metrics = []
+            for idx, metrics in enumerate(metrics_list):
+                top_predictions = [f"{t.token} ({t.probability:.3f})" for t in metrics.token_predictions[:3]]
+                step_metrics = (
+                    f"Step {idx}:\n"
+                    f"- Raw Entropy: {metrics.raw_entropy:.4f}\n"
+                    f"- Semantic Entropy: {metrics.semantic_entropy:.4f}\n"
+                    f"- Top 3 Predictions: {' | '.join(top_predictions)}"
+                )
+                detailed_metrics.append(step_metrics)
+
+            # Format attention patterns
+            attention_patterns = []
+            if attention_data and attention_data.token_attentions:
+                for attn in attention_data.token_attentions:
+                    token = attn["token"]
+                    grid = attn["attention_grid"]
+                    max_attention = np.max(grid)
+                    attention_patterns.append(f"Token '{token}': Max attention {max_attention:.4f}")
+
+            # Create and encode attention visualization
+            viz_image = self._create_attention_visualization(image, attention_data)
+            attention_base64 = self._encode_image_to_base64(viz_image)
+            
+            # Prepare the prompt
+            prompt = self.visual_analysis_template.format(
+                input_query=input_query,
+                generated_text=generated_text,
+                detailed_metrics="\n".join(detailed_metrics),
+                attention_patterns="\n".join(attention_patterns)
+            )
+
+            # Use the wrapper to generate insight with the attention visualization
+            return self.together_model.generate_insight_with_image(
+                prompt=prompt,
+                image_data=[attention_base64],
+                temperature=0.7,
+                max_tokens=800
+            )
+            
+        except Exception as e:
+            print(f"Error in visual insight generation: {str(e)}")
+            traceback.print_exc()
+            return None
+
+    def generate_overall_insight(
+        self,
+        metrics_list: List[UncertaintyMetrics],
+        input_query: Optional[str] = "",
+        generated_text: Optional[str] = "",
+        attention_data: Optional[AttentionData] = None,
+        image: Optional[Image.Image] = None,
+        use_visual_analysis: bool = True
+    ) -> Optional[Dict]:
+        """Generate comprehensive analysis including visual analysis by default"""
+        # Get base analysis
+        base_insight = super().generate_overall_insight(
+            metrics_list=metrics_list,
+            input_query=input_query,
+            generated_text=generated_text,
+            attention_data=attention_data
+        )
+        
+        # Convert string insight to dict if necessary
+        final_insight = {}
+        if isinstance(base_insight, str):
+            try:
+                # Try to parse as JSON first
+                final_insight = json.loads(base_insight)
+            except json.JSONDecodeError:
+                # If not valid JSON, store as raw text
+                final_insight = {"base_analysis": base_insight}
+        elif isinstance(base_insight, dict):
+            final_insight = base_insight
+        elif base_insight is None:
+            final_insight = {}
+        
+        # Add enhanced visual analysis if possible
+        if use_visual_analysis and self.together_model and image and attention_data:
+            visual_analysis = self.generate_visual_insight(
+                metrics_list=metrics_list,
+                image=image,
+                attention_data=attention_data,
+                input_query=input_query,
+                generated_text=generated_text
+            )
+            
+            if visual_analysis:
+                final_insight["enhanced_visual_analysis"] = visual_analysis
+        
+        return final_insight

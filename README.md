@@ -6,10 +6,11 @@
 
   # Klarity 
 
-**Toolkit for LLM behavior analysis & uncertainty mitigation**
+**Generative AI Toolkit: Automated Explainability, Error Mitigation & Multi-Model Support**
     <br>
     <br>
-    🐳 **Now with reasoning model support to analyse CoTs entropy and improve RL datasets**
+    🖼️ **Update 12/02 support integration for VLM and visual attention monitoring**
+    🐳 **Update 08/02 support for reasoning model to analyse CoTs entropy and improve RL datasets**
     <br>
     <br>
   <a href="https://discord.gg/wCnTRzBE">
@@ -58,10 +59,12 @@ from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration, 
 from PIL import Image
 import torch
 from klarity import UncertaintyEstimator
-from klarity.core.analyzer import VLMAnalyzer
+from klarity.core.analyzer import EnhancedVLMAnalyzer
 import os
+import json
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 # Initialize VLM model
 model_id = "llava-hf/llava-onevision-qwen2-0.5b-ov-hf"
 model = LlavaOnevisionForConditionalGeneration.from_pretrained(
@@ -72,20 +75,21 @@ model = LlavaOnevisionForConditionalGeneration.from_pretrained(
 
 processor = AutoProcessor.from_pretrained(model_id)
 
-# Create estimator with VLMAnalyzer
+# Create estimator with EnhancedVLMAnalyzer
 estimator = UncertaintyEstimator(
     top_k=100,
-    analyzer=VLMAnalyzer(
+    analyzer=EnhancedVLMAnalyzer(
         min_token_prob=0.01,
-        insight_model="together:together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        insight_model="together:meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
         insight_api_key="your_api_key",
-        vision_config=model.config.vision_config, 
+        vision_config=model.config.vision_config,
         use_cls_token=True
     ),
 )
+
 uncertainty_processor = estimator.get_logits_processor()
 
-# Set up generation
+# Set up generation for the example
 image_path = "examples/images/plane.jpg"
 question = "How many engines does the plane have?"
 image = Image.open(image_path)
@@ -124,20 +128,21 @@ try:
         use_cache=True
     )
 
-    # Analyze the generation - Note the corrected parameter order
+    # Analyze the generation - now includes both images and enhanced analysis
     result = estimator.analyze_generation(
         generation_output=generation_output,
-        model=model,                    # Add model parameter
-        tokenizer=processor,            # Changed from processor to tokenizer parameter
+        model=model,
+        tokenizer=processor,
         processor=uncertainty_processor,
-        prompt=question
+        prompt=question,
+        image=image  # Image is required for enhanced analysis
     )
 
-    # Get generated text using the processor instead of raw sequences
+    # Get generated text
     input_length = inputs.input_ids.shape[1]
     generated_sequence = generation_output.sequences[0][input_length:]
     generated_text = processor.decode(generated_sequence, skip_special_tokens=True)
-    
+
     print(f"\nQuestion: {question}")
     print(f"Generated answer: {generated_text}")
 
@@ -151,23 +156,14 @@ try:
         for i, pred in enumerate(metrics.token_predictions[:3], 1):
             print(f"  {i}. {pred.token} (prob: {pred.probability:.4f})")
 
-    # Attention Analysis (if available)
-    if result.attention_data:
-        print("\nAttention Analysis:")
-        estimator.analyzer.visualize_attention(
-            result.attention_data,
-            image,
-            save_path="examples/attention_maps/attention_visualization.png"
-        )
-
     # Show comprehensive insight
     print("\nComprehensive Analysis:")
-    print(result.overall_insight)
+    print(json.dumps(result.overall_insight, indent=2))
 
 except Exception as e:
     print(f"Error during generation: {str(e)}")
     import traceback
-    traceback.print_exc()  # Print full traceback for debugging
+    traceback.print_exc()
 ```
 
 ### 📝 Reasoning LLM Usage Example
@@ -329,35 +325,37 @@ Attention insights into where your model is focusing and related token uncertain
 {
     "scores": {
         "overall_uncertainty": "<0-1>",
-        "visual_grounding": "<0-1>",
-        "confidence": "<0-1>"
+        "visual_grounding": "<0-1>",  // Image-text match quality
+        "confidence": "<0-1>"         // Answer certainty
     },
     "visual_analysis": {
-        "attention_quality": {
+        "attention_quality": {{      // How well focus matched the task
             "score": "<0-1>",
-            "key_regions": ["<region1>", "<region2>"],
-            "missed_regions": ["<region1>", "<region2>"]
+            "key_regions": ["<main area 1>", "<main area 2>"],
+            "missed_regions": ["<ignored area 1>", "<ignored area 2>"]
         },
-        "token_attention_alignment": [
+        "token_attention_alignment": [  // Word vs focus match
             {
-                "token": "<token>",
-                "attended_region": "<region>",
-                "relevance": "<0-1>"
+                "word": "<token>",
+                "focused_spot": "<region>",
+                "relevance": "<0-1>",   // How related to answer
+                "uncertainty": "<0-1>"  // Word-level doubt
             }
         ]
-    },
+    }},
     "uncertainty_analysis": {
-        "high_uncertainty_segments": [
+        "problem_spots": [  // High-doubt sections
             {
-                "text": "<text>",
-                "cause": "<reason>",
-                "visual_context": "<what_model_looked_at>"
+                "text": "<text part>",
+                "reason": "<why uncertain>",
+                "looked_at": "<image area>",
+                "connection": "<focus vs doubt link>"
             }
         ],
-        "improvement_suggestions": [
+        "improvement_tips": [  // How to do better
             {
-                "aspect": "<what>",
-                "suggestion": "<how>"
+                "area": "<what to fix>",
+                "tip": "<how to fix>"
             }
         ]
     }
@@ -480,6 +478,7 @@ Planned support:
 | Qwen2.5-0.5B-Instruct | Instruct | ✅ Tested | ⚡ Low | Consistently output unstructured analysis instead of JSON. Best used with structured prompting and validation. |
 | Qwen2.5-7B-Instruct | Instruct | ✅ Tested | ⚠️ Moderate | Sometimes outputs well-formed JSON analysis. |
 | Llama-3.3-70B-Instruct-Turbo | Instruct | ✅ Tested | ✅ High | Reliably outputs well-formed JSON analysis. Recommended for production use. |
+| Llama-3.2-90B-Vision-Instruct-Turbo | Vision | ✅ Tested | ✅ High | Reliably outputs well-formed JSON analysis. Recommended for production use. |
 
 ### JSON Output Reliability Guide:
 - ✅ High: Consistently outputs valid JSON (>80% of responses)
