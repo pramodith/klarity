@@ -327,26 +327,26 @@ Attention insights into where your model is focusing and related token uncertain
 {
     "scores": {
         "overall_uncertainty": "<0-1>",
-        "visual_grounding": "<0-1>",  // Image-text match quality
-        "confidence": "<0-1>"         // Answer certainty
+        "visual_grounding": "<0-1>",  
+        "confidence": "<0-1>"         
     },
     "visual_analysis": {
-        "attention_quality": {{      // How well focus matched the task
+        "attention_quality": {     
             "score": "<0-1>",
             "key_regions": ["<main area 1>", "<main area 2>"],
             "missed_regions": ["<ignored area 1>", "<ignored area 2>"]
         },
-        "token_attention_alignment": [  // Word vs focus match
+        "token_attention_alignment": [  
             {
                 "word": "<token>",
                 "focused_spot": "<region>",
-                "relevance": "<0-1>",   // How related to answer
-                "uncertainty": "<0-1>"  // Word-level doubt
+                "relevance": "<0-1>",   
+                "uncertainty": "<0-1>"  
             }
         ]
     }},
     "uncertainty_analysis": {
-        "problem_spots": [  // High-doubt sections
+        "problem_spots": [  
             {
                 "text": "<text part>",
                 "reason": "<why uncertain>",
@@ -354,7 +354,7 @@ Attention insights into where your model is focusing and related token uncertain
                 "connection": "<focus vs doubt link>"
             }
         ],
-        "improvement_tips": [  // How to do better
+        "improvement_tips": [ 
             {
                 "area": "<what to fix>",
                 "tip": "<how to fix>"
