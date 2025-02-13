@@ -1,9 +1,12 @@
-import os
 from typing import Dict, List, Any, Optional
+from datasets import load_dataset
 from dotenv import load_dotenv
 from openai import OpenAI
 from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
+
+import argparse
+import os
 
 class HFInferenceClient:
     def __init__(self, api_url: Optional[str] = None):
@@ -69,7 +72,12 @@ class HFInferenceClient:
 class VLLMClient:
 
     WAIT_STR: str = "Wait, "
-    def __init__(self, model:str = "agentica-org/DeepScaleR-1.5B-Preview", tensor_parallel_size: int = 1):
+    def __init__(
+        self, 
+        model:str = "agentica-org/DeepScaleR-1.5B-Preview", 
+        tensor_parallel_size: int = 1, 
+        ):
+        
         self.model = LLM(
             model,
             tensor_parallel_size=tensor_parallel_size,
@@ -80,17 +88,24 @@ class VLLMClient:
         self.tokenizer = AutoTokenizer.from_pretrained(model)
     
     def add_system_prompt(self, prompt: str):
-        prompt = "How many r in raspberry"
         prompt = f"You are a helpful assistant."\
             "Please reason step by step, and put your final answer within \\boxed\{\}."\
             "Solve the following problem:"\
-            +prompt+" <think>\n"
+            + prompt + " <think>\n"
         return prompt
     
     def extract_answer(self, text: str):
+        # Extract the answer between \boxed{ and }
         return text[text.find("\\boxed\\{"):text.find("}")+1]
 
-    def query(self, query: List[str], min_tokens: int = 0, max_tokens: int = 32768):
+    def query(
+        self, 
+        query: List[str], 
+        min_tokens: int = 0, 
+        max_tokens: int = 32768,
+        temperature: float = 0.6,
+        top_p: float = 0.95,
+    ):
         """
         Query the model with the given prompt.
 
@@ -98,6 +113,8 @@ class VLLMClient:
         - prompt (str): The prompt to generate text for.
         - min_tokens (int, optional): The minimum number of tokens to generate. Defaults to 0.
         - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 32768.
+        - temperature (float, optional): The temperature to use. Defaults to 0.6.
+        - top_p (float, optional): The top-p to use. Defaults to 0.95.
 
         Returns:
         - str: The generated text.
@@ -105,6 +122,8 @@ class VLLMClient:
         sampling_params = SamplingParams(
             max_tokens=max_tokens,
             min_tokens=min_tokens,
+            temperature=temperature,
+            top_p=top_p,
             # stop_token_ids=self.tokenizer("</think>")["input_ids"]
         )
 
@@ -120,7 +139,14 @@ class VLLMClient:
         num_generated_tokens = len(output_generation.outputs[0].token_ids)
         return generated_text, num_generated_tokens
 
-    def query_with_extra_wait(self, query: str, num_waits: int = 1, max_tokens: int = 32768):
+    def query_with_extra_wait(
+        self, 
+        prompt: str, 
+        num_waits: int = 1,
+        sampling_params: SamplingParams = SamplingParams(), 
+        temperature: float = 0.6,
+        top_p: float = 0.95
+    ):
         """
         Query the model with the given prompt.
 
@@ -128,9 +154,11 @@ class VLLMClient:
         - prompt (str): The prompt to generate text for.
         - min_tokens (int, optional): The minimum number of tokens to generate. Defaults to 0.
         - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 32768.
+        - temperature (float, optional): The temperature to use. Defaults to 0.6.
+        - top_p (float, optional): The top-p to use. Defaults to 0.95.
 
         Returns:
-        - str: The generated text.
+        - str: The generated text and the number of tokens generated.
         """
 
         if num_waits < 0:
@@ -142,12 +170,6 @@ class VLLMClient:
 
         generated_texts = []
         num_generated_tokens = []
-
-        sampling_params = SamplingParams(
-            max_tokens=max_tokens,
-            min_tokens=0,
-            stop_token_ids=stop_token_ids,
-        )
 
         for wait_ind in range(num_waits+1):
             if wait_ind == num_waits - 1:
@@ -166,10 +188,52 @@ class VLLMClient:
 
         # Get the entire generated text and the total generated token count
         return " ".join(generated_texts), sum(num_generated_tokens)
+    
+    def load_aime_dataset(self, dataset_path: str = "HuggingFaceH4/aime_2024") -> List[str]:
+        dataset = load_dataset(dataset_path)
+        dataset = dataset["train"]
+        final_dataset = []
+        for row in dataset:
+            final_dataset.append({"query": row["problem"], "answer": row["answer"]})
+
+        return final_dataset
+    
+    def main(
+        max_tokens: int = 32768,
+        temperature: float = 0.6,
+        top_p: float = 0.95,
+    ):  
+        """
+        Main function to run the benchmark.
+
+        Args:
+        - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 32768.
+        - temperature (float, optional): The temperature to use. Defaults to 0.6.
+        - top_p (float, optional): The top-p to use. Defaults to 0.95.
+
+        Returns:
+        - None
+        """
+        dataset = vllm_client.load_aime_dataset()
+        sampling_params = SamplingParams(
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+        )
+
+        for row in dataset:
+            query = row["query"]
+            answer = row["answer"]
+            prompt = vllm_client.add_system_prompt(query)
+            generated_response, total_generated_tokens = vllm_client.query_with_extra_wait(prompt, 1)
+            print(generated_response)
+
 
 
 # Example usage
 if __name__ == "__main__":
+    # client = HFInferenceClient("https://p61e4xep6f1oyhp6.us-east-1.aws.endpoints.huggingface.cloud/v1")
+    # prompt = "How many r in raspberry"
     # client = HFInferenceClient("https://p61e4xep6f1oyhp6.us-east-1.aws.endpoints.huggingface.cloud/v1")
     # prompt = "How many r in raspberry"
 
@@ -181,8 +245,18 @@ if __name__ == "__main__":
     # except Exception as e:
     #     print(f"Error: {e}")
 
+    # Accept args from the user 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--num_waits", type=int, default=1, help="Number of extra waits to add")
+    parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens for the query")
+    parser.add_argument("--temperature", type=float, default=0.6, help="Temperature for the query")
+    parser.add_argument("--top_p", type=float, default=0.95, help="Top p for the query")
+    
+    args = parser.parse_args()
     vllm_client = VLLMClient()
-    query = "How many r in raspberry"
-    prompt = vllm_client.add_system_prompt(query)
-    generated_response, total_generated_tokens = vllm_client.query_with_extra_wait(prompt, 1)
-    print(generated_response)
+
+    vllm_client.main(
+        max_tokens=args.max_tokens,
+        temperature=args.temperature,
+        top_p=args.top_p,
+    )
