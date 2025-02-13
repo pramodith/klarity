@@ -88,6 +88,7 @@ class VLLMClient:
                 return text[last_occurrence+len("boxed{"):end_pos]
             return ""
         except ValueError:
+            logger.error(f"Failed to parse {text}")
             return ""
     
     def get_vllm_output(self, output_generation):
