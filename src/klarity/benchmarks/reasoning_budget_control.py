@@ -1,77 +1,23 @@
-from typing import Dict, List, Any, Optional
 from datasets import load_dataset
-from dotenv import load_dotenv
-from openai import OpenAI
-from vllm import LLM, SamplingParams
+from enum import Enum
 from transformers import AutoTokenizer
+from tqdm import tqdm
+from typing import List
+from vllm import LLM, SamplingParams
+from vllm.inputs.data import TokensPrompt
 
 import argparse
-import os
+import numpy as np
 
-class HFInferenceClient:
-    def __init__(self, api_url: Optional[str] = None):
-        """
-        Initialize the HuggingFace Inference client.
-        
-        Args:
-            model_id: The model ID on HuggingFace (e.g., 'gpt2')
-            api_key: HuggingFace API key. If None, will look for 'HF_API_KEY' in environment
-        """
-        load_dotenv()  # Load environment variables from .env file
-        self.api_key = os.getenv('HF_API_KEY')
-        self.api_url = api_url
-
-        if not self.api_key or not self.api_url:
-            raise ValueError("HuggingFace API key not found. Please provide it or set HF_API_KEY environment variable")
-        
-    def query(
-        self,
-        content: str,
-    ) -> Dict[str, Any]:
-        """
-        Query the HuggingFace model with retry mechanism and proper error handling.
-        
-        Args:
-            content: The input text to process
-            
-        Returns:
-            Dict containing the model's response
-            
-        Raises:
-            requests.exceptions.RequestException: If the request fails after all retries
-        """
-        tok = AutoTokenizer.from_pretrained("simplescaling/s1-32B")
-
-        stop_token_ids = tok("<|im_end|>")["input_ids"]
-        
-        client = OpenAI(
-            base_url = self.api_url,
-            api_key = self.api_key
-        )
-
-        chat_completion = client.chat.completions.create(
-            model="tgi",
-            messages = [
-                {"role": "system", "content": "You are a helpful and harmless assistant. You are Qwen developed by Alibaba. You should think step-by-step."},
-                {"role": "user", "content": content}
-            ],
-            top_p=0.9,
-            temperature=0.1,
-            max_tokens=1024,
-            stream=False,
-            seed=None,
-            stop=None,
-            frequency_penalty=None,
-            presence_penalty=None,
-            logprobs=True
-        )
-
-        for message in chat_completion.choices:
-            print(message.message.content, end = "")
+class DatasetType(str, Enum):
+    AIME = "aime"
+    MATH = "math"
 
 class VLLMClient:
 
-    WAIT_STR: str = "Wait, "
+    WAIT_STR: str = " Wait, "
+    THINK_START_STR = "<think>"
+    THINK_END_STR = "</think>"
     def __init__(
         self, 
         model:str = "agentica-org/DeepScaleR-1.5B-Preview", 
@@ -85,77 +31,89 @@ class VLLMClient:
             dtype="bfloat16",
         )
 
-        self.tokenizer = AutoTokenizer.from_pretrained(model)
+        self.tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model)
     
     def add_system_prompt(self, prompt: str):
-        prompt = f"You are a helpful assistant."\
-            "Please reason step by step, and put your final answer within \\boxed\{\}."\
-            "Solve the following problem:"\
-            + prompt + " <think>\n"
-        return prompt
-    
-    def extract_answer(self, text: str):
-        # Extract the answer between \boxed{ and }
-        return text[text.find("\\boxed\\{"):text.find("}")+1]
-
-    def query(
-        self, 
-        query: List[str], 
-        min_tokens: int = 0, 
-        max_tokens: int = 32768,
-        temperature: float = 0.6,
-        top_p: float = 0.95,
-    ):
         """
-        Query the model with the given prompt.
+        Add system prompt to the prompt.
 
         Args:
-        - prompt (str): The prompt to generate text for.
-        - min_tokens (int, optional): The minimum number of tokens to generate. Defaults to 0.
-        - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 32768.
-        - temperature (float, optional): The temperature to use. Defaults to 0.6.
-        - top_p (float, optional): The top-p to use. Defaults to 0.95.
+            prompt (str): The prompt to add the system prompt to.
 
         Returns:
-        - str: The generated text.
+            str: The prompt with the system prompt added.
         """
-        sampling_params = SamplingParams(
-            max_tokens=max_tokens,
-            min_tokens=min_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            # stop_token_ids=self.tokenizer("</think>")["input_ids"]
-        )
+        prompt = "Please reason step by step, and put your final answer within \\boxed\{\}."\
+            "Solve the following problem:"\
+            + prompt
+        return prompt
 
-        o = self.model.generate(query, sampling_params=sampling_params)
-        num_generated_tokens = [len(o[i].outputs[0].token_ids) for i in range(len(o))]
-        print(f"Average number of tokens: {sum(num_generated_tokens) / len(num_generated_tokens)}")
-        final_answers = [self.extract_answer(o[i].outputs[0].text) for i in range(len(o))]
-        print(o[0].outputs[0].text)
-        return num_generated_tokens, final_answers
+    def tokenize_prompt(self, prompt: str) -> str:
+        """
+        Tokenize the prompt using the tokenizer.
+
+        Args:
+            prompt (str): The prompt to tokenize.
+
+        Returns:
+            str: The text of the prompt after applying the chat template.
+        """
+        prompt = self.add_system_prompt(prompt)
+        tokens_prompt = TokensPrompt(
+            prompt_token_ids = self.tokenizer.apply_chat_template(
+            [{"role": "user", "content": prompt}],
+            add_generation_prompt=True,
+        ))
+
+        return self.tokenizer.decode(tokens_prompt["prompt_token_ids"], skip_special_tokens=False) + self.THINK_START_STR
+
+    def extract_answer(self, text: str):
+        """
+        Extract the answer between boxed{ and }.
+        
+        Args:
+            text (str): The text to extract the answer from.
+        
+        Returns:
+            str: The answer extracted from the text.
+        """
+        try:
+            last_occurrence = text.rindex("boxed{")
+            end_pos = text.find("}", last_occurrence)
+            if end_pos != -1:
+                return text[last_occurrence+len("boxed{"):end_pos]
+            return ""
+        except ValueError:
+            return ""
     
     def get_vllm_output(self, output_generation):
+        """
+        Get the output of the model.
+
+        Args:
+            output_generation (OutputGeneration): The output generation object.
+
+        Returns:
+            Tuple[str, List[int], int]: The generated text, the generated tokens, and the number of generated tokens.
+        """
         generated_text = output_generation.outputs[0].text
+        generated_tokens = output_generation.outputs[0].token_ids
         num_generated_tokens = len(output_generation.outputs[0].token_ids)
-        return generated_text, num_generated_tokens
+        return generated_text, generated_tokens, num_generated_tokens
 
     def query_with_extra_wait(
         self, 
         prompt: str, 
         num_waits: int = 1,
         sampling_params: SamplingParams = SamplingParams(), 
-        temperature: float = 0.6,
-        top_p: float = 0.95
     ):
         """
         Query the model with the given prompt.
 
         Args:
         - prompt (str): The prompt to generate text for.
-        - min_tokens (int, optional): The minimum number of tokens to generate. Defaults to 0.
-        - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 32768.
-        - temperature (float, optional): The temperature to use. Defaults to 0.6.
-        - top_p (float, optional): The top-p to use. Defaults to 0.95.
+        - num_waits (int, optional): The number of extra waits to add. Defaults to 1.
+        - sampling_params (SamplingParams, optional): The sampling parameters to use. Defaults to SamplingParams().
 
         Returns:
         - str: The generated text and the number of tokens generated.
@@ -164,30 +122,46 @@ class VLLMClient:
         if num_waits < 0:
             raise ValueError("num_waits must be non-negative")
         elif num_waits == 0:
-            stop_token_ids = None
+            stop = None
         else:
-            stop_token_ids = self.tokenizer("</think>")["input_ids"]
+            stop = [self.THINK_START_STR]
 
         generated_texts = []
         num_generated_tokens = []
 
         for wait_ind in range(num_waits+1):
             if wait_ind == num_waits - 1:
-                sampling_params.stop_token_ids = stop_token_ids
-
-            o = self.model.generate(prompt, sampling_params=sampling_params)
-            gt, nt = self.get_vllm_output(o[0])
-            # Force reflection by adding another wait
-            prompt += gt + self.WAIT_STR
-            generated_texts.append(gt)
-            num_generated_tokens.append(nt)
+                sampling_params.stop_token_ids = stop
+            try:
+                o = self.model.generate(prompt, sampling_params=sampling_params)
+                gt, gt_tokens, nt = [self.get_vllm_output(output) for output in o]
+                prompt_text = [self.tokenizer.decode(tokens, skip_special_tokens=False) for tokens in gt_tokens]
+                
+                # Append the Wait string if not the last wait
+                if wait_ind < num_waits:
+                    prompt_text = map(lambda x: x + self.WAIT_STR, prompt_text)
+                generated_texts.append(gt)
+                num_generated_tokens.append(nt)
+                prompt = self.tokenizer(prompt_text)
             
+            except Exception as e:
+                generated_texts.append("")
+                num_generated_tokens.append(-1)
+                answer = ""
 
-        with open(f"generated_texts_{num_waits}.txt", "w") as f:
-            f.write("||".join(generated_texts))
+
+        # We want to find the total number of tokens generated per input prompt so we need to sum
+        # along the wait axis.
+        num_generated_tokens = np.array(num_generated_tokens).sum(0)
+
+        # Concatenate along the sum axis
+        all_generated_texts = np.array(generated_texts).sum(0)
+        answer = [self.extract_answer(all_generated_text) for all_generated_text in all_generated_texts]
+        # with open(f"generated_texts_{num_waits}.txt", "w") as f:
+        #     f.write("||".join(generated_texts))
 
         # Get the entire generated text and the total generated token count
-        return " ".join(generated_texts), sum(num_generated_tokens)
+        return prompt_text, sum(num_generated_tokens), answer
     
     def load_aime_dataset(self, dataset_path: str = "HuggingFaceH4/aime_2024") -> List[str]:
         dataset = load_dataset(dataset_path)
@@ -209,6 +183,11 @@ class VLLMClient:
         Returns:
         - float: The accuracy of the predictions.
         """
+        if len(predictions) != len(ground_truths):
+            raise ValueError("Predictions and ground truths must have the same length")
+        if len(predictions) == 0:
+            return 0.0
+        
         correct = 0
         total = len(predictions)
         for pred, gt in zip(predictions, ground_truths):
@@ -217,7 +196,10 @@ class VLLMClient:
         return correct / total
     
     def main(
+        self,
         num_waits: int = 0,
+        num_sample_responses: int = 1,
+        dataset_type: DatasetType = DatasetType.AIME,
         max_tokens: int = 32768,
         temperature: float = 0.6,
         top_p: float = 0.95,
@@ -226,6 +208,7 @@ class VLLMClient:
         Main function to run the benchmark.
 
         Args:
+        - dataset_type (DatasetType, optional): The type of dataset to use. Defaults to DatasetType.AIME.
         - num_waits (int, optional): The number of extra waits to add. Defaults to 0.
         - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 32768.
         - temperature (float, optional): The temperature to use. Defaults to 0.6.
@@ -234,54 +217,73 @@ class VLLMClient:
         Returns:
         - None
         """
-        dataset = vllm_client.load_aime_dataset()
+        if dataset_type == DatasetType.AIME.value:
+            dataset = vllm_client.load_aime_dataset()
+        # elif dataset_type == DatasetType.MATH.value:
+        #     dataset = vllm_client.load_math_dataset()
+        else:
+            raise ValueError(f"Unknown dataset type: {dataset_type}")
+
         sampling_params = SamplingParams(
             max_tokens=max_tokens,
             temperature=temperature,
             top_p=top_p,
         )
-        
-        predicted_answers = []
-        gt_answers = []
-        for row in dataset:
-            query = row["query"]
-            answer = row["answer"]
-            prompt = vllm_client.add_system_prompt(query)
-            generated_response, total_generated_tokens = vllm_client.query_with_extra_wait(prompt, num_waits)
-            print(generated_response)
-            predicted_answers.append(generated_response)
-            gt_answers.append(answer)
 
-        math_accuracy = self.compute_math_accuracy(predicted_answers, gt_answers)
-        print(f"Math Accuracy: {math_accuracy * 100:.2f}%")
-        return math_accuracy
+        accuracy_across_samples = []
+        num_generated_tokens = 0
+        for i in tqdm(range(num_sample_responses), desc="Sample number", total=num_sample_responses):
+            predicted_answers = []
+            gt_answers = []
+            queries = []
+            for row in tqdm(dataset[:3], desc="Dataset row", total=len(dataset)):
+                queries.append(row["query"])
+                gt_answers.append(row["answer"])
 
-# Example usage
+            prompts = [self.add_system_prompt(query) for query in queries]
+            inputs = [self.tokenize_prompt(prompt) for prompt in prompts]
+            
+            generated_response, total_generated_tokens, predicted_answer = self.query_with_extra_wait(inputs, num_waits, sampling_params)
+            
+            if total_generated_tokens == -1:
+                continue
+            num_generated_tokens += total_generated_tokens
+            predicted_answers.append(predicted_answer)
+
+            accuracy = self.compute_math_accuracy(predicted_answers, gt_answers)
+            accuracy_across_samples.append(accuracy)
+            print(f"Accuracy for sample {i}: {accuracy * 100}%")
+            print(f"Average number of tokens generated: {num_generated_tokens / len(dataset)}")
+
+        pass_1 = sum(accuracy_across_samples) / len(accuracy_across_samples) * 100
+        print(f"Pass@1 for {num_sample_responses}: {pass_1}%")
+
 if __name__ == "__main__":
-    # client = HFInferenceClient("https://p61e4xep6f1oyhp6.us-east-1.aws.endpoints.huggingface.cloud/v1")
-    # prompt = "How many r in raspberry"
-    # client = HFInferenceClient("https://p61e4xep6f1oyhp6.us-east-1.aws.endpoints.huggingface.cloud/v1")
-    # prompt = "How many r in raspberry"
-
-    # try:
-    #     result = client.query(
-    #         prompt,
-    #     )
-    #     print(result)
-    # except Exception as e:
-    #     print(f"Error: {e}")
-
     # Accept args from the user 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_waits", type=int, default=1, help="Number of extra waits to add")
+    parser.add_argument("--num_waits", type=int, default=0, help="Number of extra waits to add")
     parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens for the query")
     parser.add_argument("--temperature", type=float, default=0.6, help="Temperature for the query")
     parser.add_argument("--top_p", type=float, default=0.95, help="Top p for the query")
-    
+    parser.add_argument(
+        "--dataset_type", 
+        type=DatasetType, 
+        default=DatasetType.AIME.value, 
+        help="Dataset type has to be either aime or math",
+        choices=[DatasetType.AIME.value, DatasetType.MATH.value]
+    )
+    args = parser.parse_args()
+    if args.dataset_type == DatasetType.AIME.value:
+        dataset_type = DatasetType.AIME
+    elif args.dataset_type == DatasetType.MATH.value:
+        dataset_type = DatasetType.MATH
+
     args = parser.parse_args()
     vllm_client = VLLMClient()
 
     vllm_client.main(
+        num_waits=args.num_waits,
+        dataset_type=dataset_type,
         max_tokens=args.max_tokens,
         temperature=args.temperature,
         top_p=args.top_p,
