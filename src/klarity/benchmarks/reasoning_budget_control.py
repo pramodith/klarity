@@ -5,9 +5,13 @@ from tqdm import tqdm
 from typing import List
 from vllm import LLM, SamplingParams
 from vllm.inputs.data import TokensPrompt
+from loguru import logger
 
 import argparse
 import numpy as np
+import sys
+
+logger.add("logs/reasoning_budget_control.log")
 
 class DatasetType(str, Enum):
     AIME = "aime"
@@ -124,44 +128,61 @@ class VLLMClient:
         elif num_waits == 0:
             stop = None
         else:
-            stop = [self.THINK_START_STR]
+            stop = [self.THINK_END_STR]
 
+        sampling_params.stop = stop
+
+        # Tokenize prompt
         generated_texts = []
         num_generated_tokens = []
 
         for wait_ind in range(num_waits+1):
-            if wait_ind == num_waits - 1:
-                sampling_params.stop_token_ids = stop
+            if wait_ind == num_waits:
+                # If this is the last wait, set stop to None to ensure full generation
+                sampling_params.stop = None
             try:
-                o = self.model.generate(prompt, sampling_params=sampling_params)
-                gt, gt_tokens, nt = [self.get_vllm_output(output) for output in o]
-                prompt_text = [self.tokenizer.decode(tokens, skip_special_tokens=False) for tokens in gt_tokens]
+                # Generate text using the model
+                outputs = self.model.generate(prompt, sampling_params=sampling_params)
                 
-                # Append the Wait string if not the last wait
+                # Process model outputs
+                generated_texts_batch, token_ids, token_counts = zip(*[
+                    self.get_vllm_output(output) for output in outputs
+                ])
+                
+                # Decode token IDs to text
+                decoded_texts = [
+                    self.tokenizer.decode(tokens, skip_special_tokens=False)
+                    for tokens in token_ids
+                ]
+                
+                # Add wait string if needed
                 if wait_ind < num_waits:
-                    prompt_text = map(lambda x: x + self.WAIT_STR, prompt_text)
-                generated_texts.append(gt)
-                num_generated_tokens.append(nt)
-                prompt = self.tokenizer(prompt_text)
-            
+                    decoded_texts = [text + self.WAIT_STR for text in decoded_texts]
+                
+                # Store results
+                generated_texts.append(list(generated_texts_batch))
+                num_generated_tokens.append(list(token_counts))
+                
+                # Prepare next prompt
+                prompt = self.tokenizer(decoded_texts)
+                
             except Exception as e:
-                generated_texts.append("")
-                num_generated_tokens.append(-1)
-                answer = ""
-
+                # Log the error and handle gracefully
+                logger.error(f"Error during text generation: {str(e)}")
+                batch_size = len(prompt)
+                generated_texts.append([""] * batch_size)
+                num_generated_tokens.append([-1] * batch_size)
 
         # We want to find the total number of tokens generated per input prompt so we need to sum
         # along the wait axis.
         num_generated_tokens = np.array(num_generated_tokens).sum(0)
+        predicted_answers = [self.extract_answer(text) for text in decoded_texts]
 
-        # Concatenate along the sum axis
-        all_generated_texts = np.array(generated_texts).sum(0)
-        answer = [self.extract_answer(all_generated_text) for all_generated_text in all_generated_texts]
         # with open(f"generated_texts_{num_waits}.txt", "w") as f:
         #     f.write("||".join(generated_texts))
 
         # Get the entire generated text and the total generated token count
-        return prompt_text, sum(num_generated_tokens), answer
+        return decoded_texts, sum(num_generated_tokens), predicted_answers
     
     def load_aime_dataset(self, dataset_path: str = "HuggingFaceH4/aime_2024") -> List[str]:
         dataset = load_dataset(dataset_path)
@@ -191,8 +212,12 @@ class VLLMClient:
         correct = 0
         total = len(predictions)
         for pred, gt in zip(predictions, ground_truths):
-            if float(pred) == float(gt):
-                correct += 1
+            try:
+                equal = float(pred) == float(gt)
+                if equal:
+                    correct += 1
+            except ValueError:
+                pass
         return correct / total
     
     def main(
@@ -200,7 +225,7 @@ class VLLMClient:
         num_waits: int = 0,
         num_sample_responses: int = 1,
         dataset_type: DatasetType = DatasetType.AIME,
-        max_tokens: int = 32768,
+        max_tokens: int = 16384,
         temperature: float = 0.6,
         top_p: float = 0.95,
     ):  
@@ -210,7 +235,7 @@ class VLLMClient:
         Args:
         - dataset_type (DatasetType, optional): The type of dataset to use. Defaults to DatasetType.AIME.
         - num_waits (int, optional): The number of extra waits to add. Defaults to 0.
-        - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 32768.
+        - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 16384.
         - temperature (float, optional): The temperature to use. Defaults to 0.6.
         - top_p (float, optional): The top-p to use. Defaults to 0.95.
 
@@ -236,33 +261,33 @@ class VLLMClient:
             predicted_answers = []
             gt_answers = []
             queries = []
-            for row in tqdm(dataset[:3], desc="Dataset row", total=len(dataset)):
+            for row in tqdm(dataset, desc="Dataset row", total=len(dataset)):
                 queries.append(row["query"])
                 gt_answers.append(row["answer"])
 
             prompts = [self.add_system_prompt(query) for query in queries]
             inputs = [self.tokenize_prompt(prompt) for prompt in prompts]
             
-            generated_response, total_generated_tokens, predicted_answer = self.query_with_extra_wait(inputs, num_waits, sampling_params)
+            generated_responses, total_generated_tokens, predicted_answers = self.query_with_extra_wait(inputs, num_waits, sampling_params)
             
             if total_generated_tokens == -1:
                 continue
             num_generated_tokens += total_generated_tokens
-            predicted_answers.append(predicted_answer)
 
             accuracy = self.compute_math_accuracy(predicted_answers, gt_answers)
             accuracy_across_samples.append(accuracy)
-            print(f"Accuracy for sample {i}: {accuracy * 100}%")
-            print(f"Average number of tokens generated: {num_generated_tokens / len(dataset)}")
+            logger.debug(f"Accuracy for sample {i}: {accuracy * 100}%")
+            logger.debug(f"Average number of tokens generated: {num_generated_tokens / len(dataset)}")
 
         pass_1 = sum(accuracy_across_samples) / len(accuracy_across_samples) * 100
-        print(f"Pass@1 for {num_sample_responses}: {pass_1}%")
+        logger.debug(f"Pass@1 for {num_sample_responses}: {pass_1}%")
+        logger.debug(f"predicted_answers: {predicted_answers}")
 
 if __name__ == "__main__":
     # Accept args from the user 
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_waits", type=int, default=0, help="Number of extra waits to add")
-    parser.add_argument("--max_tokens", type=int, default=32768, help="Max tokens for the query")
+    parser.add_argument("--max_tokens", type=int, default=16384, help="Max tokens for the query")
     parser.add_argument("--temperature", type=float, default=0.6, help="Temperature for the query")
     parser.add_argument("--top_p", type=float, default=0.95, help="Top p for the query")
     parser.add_argument(
