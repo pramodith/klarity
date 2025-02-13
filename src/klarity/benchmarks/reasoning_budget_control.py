@@ -198,7 +198,26 @@ class VLLMClient:
 
         return final_dataset
     
+    def compute_math_accuracy(self, predictions: List[str], ground_truths: List[str]) -> float:
+        """
+        Compute the accuracy of the predictions compared to the ground truth for math problems.
+
+        Args:
+        - predictions (List[str]): The predicted answers.
+        - ground_truths (List[str]): The ground truth answers.
+
+        Returns:
+        - float: The accuracy of the predictions.
+        """
+        correct = 0
+        total = len(predictions)
+        for pred, gt in zip(predictions, ground_truths):
+            if float(pred) == float(gt):
+                correct += 1
+        return correct / total
+    
     def main(
+        num_waits: int = 0,
         max_tokens: int = 32768,
         temperature: float = 0.6,
         top_p: float = 0.95,
@@ -207,6 +226,7 @@ class VLLMClient:
         Main function to run the benchmark.
 
         Args:
+        - num_waits (int, optional): The number of extra waits to add. Defaults to 0.
         - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 32768.
         - temperature (float, optional): The temperature to use. Defaults to 0.6.
         - top_p (float, optional): The top-p to use. Defaults to 0.95.
@@ -220,15 +240,21 @@ class VLLMClient:
             temperature=temperature,
             top_p=top_p,
         )
-
+        
+        predicted_answers = []
+        gt_answers = []
         for row in dataset:
             query = row["query"]
             answer = row["answer"]
             prompt = vllm_client.add_system_prompt(query)
-            generated_response, total_generated_tokens = vllm_client.query_with_extra_wait(prompt, 1)
+            generated_response, total_generated_tokens = vllm_client.query_with_extra_wait(prompt, num_waits)
             print(generated_response)
+            predicted_answers.append(generated_response)
+            gt_answers.append(answer)
 
-
+        math_accuracy = self.compute_math_accuracy(predicted_answers, gt_answers)
+        print(f"Math Accuracy: {math_accuracy * 100:.2f}%")
+        return math_accuracy
 
 # Example usage
 if __name__ == "__main__":
