@@ -1,15 +1,14 @@
 from datasets import load_dataset
 from enum import Enum
+from loguru import logger
 from transformers import AutoTokenizer
 from tqdm import tqdm
 from typing import List
 from vllm import LLM, SamplingParams
 from vllm.inputs.data import TokensPrompt
-from loguru import logger
 
 import argparse
 import numpy as np
-import sys
 
 logger.add("logs/reasoning_budget_control.log")
 
@@ -85,7 +84,7 @@ class VLLMClient:
             last_occurrence = text.rindex("boxed{")
             end_pos = text.find("}", last_occurrence)
             if end_pos != -1:
-                return text[last_occurrence+len("boxed{"):end_pos]
+                return text[last_occurrence+len("boxed{"): end_pos]
             return ""
         except ValueError:
             logger.error(f"Failed to parse {text}")
@@ -158,14 +157,12 @@ class VLLMClient:
                 
                 # Add wait string if needed
                 if wait_ind < num_waits:
-                    decoded_texts = [text + self.WAIT_STR for text in decoded_texts]
+                    decoded_texts = [text.rstrip(self.THINK_END_STR) + self.WAIT_STR for text in decoded_texts]
                 
                 # Store results
                 generated_texts.append(list(generated_texts_batch))
                 num_generated_tokens.append(list(token_counts))
-                
-                # Prepare next prompt
-                prompt = self.tokenizer(decoded_texts)
+                prompt = decoded_texts
                 
             except Exception as e:
                 # Log the error and handle gracefully
@@ -176,7 +173,7 @@ class VLLMClient:
 
         # We want to find the total number of tokens generated per input prompt so we need to sum
         # along the wait axis.
-        num_generated_tokens = np.array(num_generated_tokens).sum(0)
+        num_generated_tokens = np.array(num_generated_tokens).sum(1)
         predicted_answers = [self.extract_answer(text) for text in decoded_texts]
 
         # with open(f"generated_texts_{num_waits}.txt", "w") as f:
@@ -188,6 +185,15 @@ class VLLMClient:
     def load_aime_dataset(self, dataset_path: str = "HuggingFaceH4/aime_2024") -> List[str]:
         dataset = load_dataset(dataset_path)
         dataset = dataset["train"]
+        final_dataset = []
+        for row in dataset:
+            final_dataset.append({"query": row["problem"], "answer": row["answer"]})
+
+        return final_dataset
+    
+    def load_math_dataset(self, dataset_path: str = "HuggingFaceH4/MATH-500") -> List[str]:
+        dataset = load_dataset(dataset_path)
+        dataset = dataset["test"]
         final_dataset = []
         for row in dataset:
             final_dataset.append({"query": row["problem"], "answer": row["answer"]})
@@ -245,8 +251,8 @@ class VLLMClient:
         """
         if dataset_type == DatasetType.AIME.value:
             dataset = vllm_client.load_aime_dataset()
-        # elif dataset_type == DatasetType.MATH.value:
-        #     dataset = vllm_client.load_math_dataset()
+        elif dataset_type == DatasetType.MATH.value:
+            dataset = vllm_client.load_math_dataset()
         else:
             raise ValueError(f"Unknown dataset type: {dataset_type}")
 
@@ -269,7 +275,7 @@ class VLLMClient:
             prompts = [self.add_system_prompt(query) for query in queries]
             inputs = [self.tokenize_prompt(prompt) for prompt in prompts]
             
-            generated_responses, total_generated_tokens, predicted_answers = self.query_with_extra_wait(inputs, num_waits, sampling_params)
+            _, total_generated_tokens, predicted_answers = self.query_with_extra_wait(inputs, num_waits, sampling_params)
             
             if total_generated_tokens == -1:
                 continue
@@ -287,7 +293,7 @@ class VLLMClient:
 if __name__ == "__main__":
     # Accept args from the user 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_waits", type=int, default=0, help="Number of extra waits to add")
+    parser.add_argument("--num_waits", type=int, default=1, help="Number of extra waits to add")
     parser.add_argument("--max_tokens", type=int, default=16384, help="Max tokens for the query")
     parser.add_argument("--temperature", type=float, default=0.6, help="Temperature for the query")
     parser.add_argument("--top_p", type=float, default=0.95, help="Top p for the query")
