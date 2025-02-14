@@ -118,5 +118,88 @@ class TestVLLMClient(unittest.TestCase):
         self.assertEqual(result, desired_result)
 
 
+    def test_compute_metrics_basic(self):
+        """Test compute_metrics with perfect predictions"""
+        # Test data
+        total_generated_tokens = [[10, 15], [12, 18]]  # 2 samples, 2 responses each
+        predicted_answers = [["4", "4"], ["16", "16"]]  # 2 samples, 2 responses each
+        gt_answers = [["4", "4"], ["16", "16"]]  # 2 samples, 2 responses each
+        
+        with patch.object(self.client, 'plot_benchmarks') as mock_plot:
+            with patch.object(self.client, 'compute_math_accuracy', return_value=1.0):
+                # Call the function
+                pass_1 = self.client.compute_metrics(
+                    total_generated_tokens=total_generated_tokens,
+                    predicted_answers=predicted_answers,
+                    gt_answers=gt_answers
+                )
+                
+                # Verify plot_benchmarks was called with correct args
+                mock_plot.assert_called_once()
+                accuracy_arg = mock_plot.call_args[0][0]
+                tokens_arg = mock_plot.call_args[0][1]
+                assert len(accuracy_arg) == len(predicted_answers[0])  # One accuracy per sample
+                self.assertTrue(np.allclose(tokens_arg, np.mean(total_generated_tokens, axis=1)))
+                
+                # Since all predictions match ground truth, accuracy should be 100%
+                self.assertEqual(pass_1, 100.0)
+
+    def test_compute_metrics_with_errors(self):
+        """Test compute_metrics with some incorrect predictions"""
+        # Test data with some incorrect predictions
+        total_generated_tokens = [[10, 15], [12, 18]]
+        predicted_answers = [["4", "5"], ["16", "15"]]  # Some wrong answers
+        gt_answers = [["4", "4"], ["16", "16"]]
+        
+        with patch.object(self.client, 'plot_benchmarks') as mock_plot:
+            with patch.object(self.client, 'compute_math_accuracy', return_value=0.5):
+                pass_1 = self.client.compute_metrics(
+                    total_generated_tokens=total_generated_tokens,
+                    predicted_answers=predicted_answers,
+                    gt_answers=gt_answers
+                )
+                
+                # Since half the predictions are wrong, accuracy should be 50%
+                self.assertEqual(pass_1, 50.0)
+                
+                # Verify average tokens calculation
+                tokens_arg = mock_plot.call_args[0][1]
+                self.assertTrue(np.allclose(tokens_arg, [12.5, 15.0]))  # Average tokens per sample
+
+    def test_compute_metrics_input_validation(self):
+        """Test compute_metrics with invalid inputs"""
+        with patch.object(self.client, 'plot_benchmarks'):
+            # Test empty inputs
+            with self.assertRaises(ValueError):
+                self.client.compute_metrics([], [], [])
+            
+            # Test mismatched shapes
+            with self.assertRaises(ValueError):
+                self.client.compute_metrics(
+                    total_generated_tokens=[[10]],
+                    predicted_answers=[["4", "4"]],
+                    gt_answers=[["4", "4"]]
+                )
+
+    def test_compute_metrics_array_conversion(self):
+        """Test compute_metrics properly converts inputs to numpy arrays"""
+        total_generated_tokens = [[10, 15]]
+        predicted_answers = [["4", "4"]]
+        gt_answers = [["4", "4"]]
+        
+        with patch.object(self.client, 'plot_benchmarks') as mock_plot:
+            with patch.object(self.client, 'compute_math_accuracy', return_value=1.0):
+                self.client.compute_metrics(
+                    total_generated_tokens=total_generated_tokens,
+                    predicted_answers=predicted_answers,
+                    gt_answers=gt_answers
+                )
+                
+                # Verify numpy array conversion
+                tokens_arg = mock_plot.call_args[0][1]
+                self.assertIsInstance(tokens_arg, np.ndarray)
+                self.assertEqual(tokens_arg.shape, (1,))  # One sample
+
+
 if __name__ == "__main__":
     unittest.main()
