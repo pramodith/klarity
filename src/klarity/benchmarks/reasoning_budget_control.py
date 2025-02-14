@@ -1,6 +1,7 @@
 from datasets import load_dataset
 from enum import Enum
 from loguru import logger
+from matplotlib import pyplot as plt
 from transformers import AutoTokenizer
 from tqdm import tqdm
 from typing import List
@@ -142,7 +143,7 @@ class VLLMClient:
                 sampling_params.stop = None
             try:
                 # Generate text using the model
-                outputs = self.model.generate(prompt, sampling_params=sampling_params)
+                outputs = self.model.generate("What's 2+2?", sampling_params=sampling_params)
                 
                 # Process model outputs
                 generated_texts_batch, token_ids, token_counts = zip(*[
@@ -227,6 +228,22 @@ class VLLMClient:
                 pass
         return correct / total
     
+    def plot_benchmarks(self, accuracy_across_samples: List[float], average_tokens_across_samples: List[float]):
+        """
+        Plots two subplot of how the accuracy and average tokens change across samples.
+        """
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        
+        ax1.plot(accuracy_across_samples)
+        ax1.set_xlabel("Sample")
+        ax1.set_ylabel("Accuracy")
+        
+        ax2.plot(average_tokens_across_samples)
+        ax2.set_xlabel("Sample")
+        ax2.set_ylabel("Average Tokens")
+        
+        fig.savefig("plots/accuracy_vs_tokens.png")
+
     def main(
         self,
         num_waits: int = 0,
@@ -263,6 +280,7 @@ class VLLMClient:
         )
 
         accuracy_across_samples = []
+        average_tokens_across_samples = []
         num_generated_tokens = 0
         for i in tqdm(range(num_sample_responses), desc="Sample number", total=num_sample_responses):
             predicted_answers = []
@@ -283,17 +301,20 @@ class VLLMClient:
 
             accuracy = self.compute_math_accuracy(predicted_answers, gt_answers)
             accuracy_across_samples.append(accuracy)
+            average_num_tokens = num_generated_tokens / len(dataset)
             logger.debug(f"Accuracy for sample {i}: {accuracy * 100}%")
-            logger.debug(f"Average number of tokens generated: {num_generated_tokens / len(dataset)}")
-
-        pass_1 = sum(accuracy_across_samples) / len(accuracy_across_samples) * 100
-        logger.debug(f"Pass@1 for {num_sample_responses}: {pass_1}%")
-        logger.debug(f"predicted_answers: {predicted_answers}")
+            logger.debug(f"Average number of tokens generated: {average_num_tokens}")
+            average_tokens_across_samples.append(average_num_tokens)
+            pass_1 = sum(accuracy_across_samples) / len(accuracy_across_samples) * 100
+            logger.debug(f"Pass@1 for {num_sample_responses}: {pass_1}%")
+            logger.debug(f"predicted_answers: {predicted_answers}")
+        
+        self.plot_benchmarks(accuracy_across_samples, average_tokens_across_samples)
 
 if __name__ == "__main__":
     # Accept args from the user 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_waits", type=int, default=1, help="Number of extra waits to add")
+    parser.add_argument("--num_waits", type=int, default=0, help="Number of extra waits to add")
     parser.add_argument("--max_tokens", type=int, default=16384, help="Max tokens for the query")
     parser.add_argument("--temperature", type=float, default=0.6, help="Temperature for the query")
     parser.add_argument("--top_p", type=float, default=0.95, help="Top p for the query")
