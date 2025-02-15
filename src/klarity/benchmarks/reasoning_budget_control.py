@@ -4,13 +4,14 @@ from loguru import logger
 from matplotlib import pyplot as plt
 from transformers import AutoTokenizer
 from tqdm import tqdm
-from typing import Dict, List
-from transformers.models import sam
+from typing import Dict, List, Optional
 from vllm import LLM, SamplingParams
 from vllm.inputs.data import TokensPrompt
 
 import argparse
 import numpy as np
+
+from klarity.core.analyzer import EntropyAnalyzer
 
 logger.add("logs/reasoning_budget_control.log")
 
@@ -18,11 +19,16 @@ class DatasetType(str, Enum):
     AIME = "aime"
     MATH = "math"
 
+class BudgetMode(str, Enum):
+    WAIT = "wait"
+    ENTROPY = "entropy"
+
 class VLLMClient:
 
     WAIT_STR: str = " Wait, "
     THINK_START_STR = "<think>"
     THINK_END_STR = "</think>"
+    BOXED_START_STR = "\\boxed{"
     def __init__(
         self, 
         model:str = "agentica-org/DeepScaleR-1.5B-Preview", 
@@ -37,6 +43,7 @@ class VLLMClient:
         )
 
         self.tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model)
+        self.entropy_analyzer = EntropyAnalyzer()
     
     def add_system_prompt(self, prompt: str):
         """
@@ -104,13 +111,129 @@ class VLLMClient:
         """
         generated_texts = []
         num_generated_tokens = []
-        
+        logprobs = []
+
         for prompt_ind in range(len(vllm_response)):
             for sample_ind in range(len(vllm_response[prompt_ind].outputs)):
                 generated_texts.append(vllm_response[prompt_ind].outputs[sample_ind].text)
                 num_generated_tokens.append(len(vllm_response[prompt_ind].outputs[sample_ind].token_ids))
+                logprobs.append(vllm_response[prompt_ind].outputs[sample_ind].logprobs)
+
+        return generated_texts, num_generated_tokens, logprobs
+    
+
+    def find_first_or_last_subsequence(self, arr: List[int], sub: List[int], is_first=False) -> int:
+        """
+        Find the index of a subsequence in a list.
+
+        Args:
+            arr (List[int]): The list to search.
+            sub (List[int]): The subsequence to search for.
+
+        Returns:
+            int: The index of the occurrence of the subsequence, or -1 if not found.
+        """
+        step = 1 if is_first else -1
+        start = 0 if is_first else len(arr) - len(sub)
+
+        for i in range(start, len(arr) - len(sub) + 1 if is_first else -1, step):
+            if arr[i:i+len(sub)] == sub:
+                return i
+        return -1
+
+    def compute_entropy_of_answer(
+        self, 
+        response_token_ids: List[int],
+        response_logprobs: np.array,
+        ) -> float:
+        """
+        Finds the token indices corresponding to the most recent \\boxed{ and },
+        uses the log probs of those tokens to compute entropy
+
+        Args:
+            response_token_ids: The token ids of the response.
+            response_logprobs: The log probs of the response.
+
+        Returns:
+            float: The entropy of the answer.
+        """
+        boxed_tokens = self.tokenizer(self.BOXED_START_STR)
+        boxed_end_tokens = self.tokenizer(self.BOXED_END_STR)
+        
+        # Find the most recent boxed tokens sequence in response
+        last_boxed_start_index = self.find_first_or_last_subsequence(
+            response_token_ids, boxed_tokens, is_first=False
+        )
+        last_boxed_end_index = self.find_first_or_last_subsequence(
+            response_token_ids[last_boxed_start_index: ], boxed_end_tokens, is_first=True
+        )
+
+        if last_boxed_start_index == -1:
+            return 0.0
+
+        # Compute entropy of the answer
+        all_entropies = []
+        for token_ind in range(last_boxed_start_index + len(boxed_tokens) - 1, last_boxed_end_index):
+            step_logprobs = response_logprobs[token_ind].item()
+            entropy = self.entropy_analyzer._calculate_raw_entropy(step_logprobs)
+            all_entropies.append(entropy)
+
+        return np.mean(all_entropies)
+
+    
+    def query_with_entropy(
+        self, 
+        prompts: List[str], 
+        sampling_params: SamplingParams = SamplingParams(), 
+        entropy_threshold: float = 0.5,
+        max_entropy_iterations: int = 2,
+        top_k: int = 5
+    ):  
+
+        num_samples = sampling_params.n
+        num_generated_tokens = np.zeros((len(prompts), num_samples), dtype=int)
+        predicted_answers = [["" for _ in range(num_samples)] for _ in range(len(prompts))]
+        predicted_logprobs = np.zeros((len(prompts), num_samples, top_k))
+        token_counts = np.zeros((len(prompts), num_samples), dtype=int)
+        max_iterations = max_entropy_iterations
+        
+        if max_iterations == 0:
+            sampling_params.stop = None
+        else:
+            sampling_params.stop = [self.THINK_END_STR]
+
+        for ind, prompt in enumerate(prompts):
+            vllm_output = self.model.generate([prompt], sampling_params)
+            generated_texts, num_generated_tokens, logprobs = self.get_vllm_output(vllm_output)
+            num_generated_tokens[ind] += token_counts
+            predicted_answers[ind] = generated_texts
+            predicted_logprobs[ind] = logprobs
+            for sample_ind in range(num_samples):
+                entire_chat_history = predicted_answers[ind][sample_ind].rstrip(self.THINK_END_STR) + self.WAIT_STR
+                sampling_params.n = 1
+                do_break = False
+                for iteration in range(max_entropy_iterations):
+                    entropy = self.compute_entropy(
+                        prompt, num_generated_tokens[ind][sample_ind], predicted_logprobs[ind][sample_ind]
+                    )
+                        
+                    if entropy < entropy_threshold or max_entropy_iterations == iteration:
+                        sampling_params.stop = None
+                        do_break = True                
+                    vllm_output = self.model.generate(entire_chat_history, sampling_params)
+                    generated_texts, num_generated_tokens, logprobs = self.get_vllm_output(vllm_output)
+                    predicted_logprobs[ind][sample_ind] = logprobs
+                    num_generated_tokens[ind][sample_ind] += token_counts[0]
+                    predicted_answers[ind][sample_ind] = entire_chat_history + generated_texts[0]
+
+                    if do_break:
+                        break
+        
+        # Get total number of tokens generated per sampled response i.e sum along wait axis
+        predicted_answers = [[self.extract_answer(predicted_answers[prompt_ind][sample_ind]) for sample_ind in range(len(predicted_answers[prompt_ind]))] for prompt_ind in range(len(predicted_answers))]
+        return num_generated_tokens, predicted_answers
+    
             
-        return generated_texts, num_generated_tokens
 
     def query_with_extra_wait(
         self, 
@@ -149,7 +272,7 @@ class VLLMClient:
             input_text = [prompt]
             # Get first n reasoning trajectories
             outputs = self.model.generate(input_text, sampling_params=sampling_params)
-            generated_texts, token_counts = self.get_vllm_output(outputs)
+            generated_texts, token_counts, _ = self.get_vllm_output(outputs)
             num_generated_tokens[ind] += token_counts
             predicted_answers[ind] = generated_texts
             for sample_ind in range(num_samples):
@@ -164,7 +287,7 @@ class VLLMClient:
                         outputs = self.model.generate(entire_chat_history, sampling_params=sampling_params)
                         
                         # Process model outputs
-                        generated_texts, token_counts = self.get_vllm_output(outputs)
+                        generated_texts, token_counts, _ = self.get_vllm_output(outputs)
                         num_generated_tokens[ind][sample_ind] += token_counts[0]
                         
                         # TODO: only consider the last generation
@@ -249,18 +372,22 @@ class VLLMClient:
     
     def plot_benchmarks(self, accuracy_across_samples: List[float], average_tokens_across_samples: List[float]):
         """
-        Plots two subplot of how the accuracy and average tokens change across samples.
+        Plots two subplots of how the accuracy and average tokens change across samples.
         """
-        fig, (ax1, ax2) = plt.subplots(1, 2)
-        
-        ax1.plot(accuracy_across_samples)
-        ax1.set_xlabel("Sample")
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+        sample_indices = range(len(accuracy_across_samples))
+
+        ax1.plot(sample_indices, accuracy_across_samples)
+        ax1.set_xlabel("Sample Index")
         ax1.set_ylabel("Accuracy")
-        
-        ax2.plot(average_tokens_across_samples)
-        ax2.set_xlabel("Sample")
+        ax1.set_title("Accuracy Across Samples")
+
+        ax2.plot(sample_indices, average_tokens_across_samples)
+        ax2.set_xlabel("Sample Index")
         ax2.set_ylabel("Average Tokens")
-        
+        ax2.set_title("Average Tokens Across Samples")
+
+        plt.tight_layout(pad=3.0)
         fig.savefig("plots/accuracy_vs_tokens.png")
 
     def main(
@@ -271,7 +398,11 @@ class VLLMClient:
         max_tokens: int = 16384,
         temperature: float = 0.6,
         top_p: float = 0.95,
-    ):  
+        budget_mode: BudgetMode = BudgetMode.WAIT,
+        entropy_threshold: Optional[float] = 0.5,
+        top_k: Optional[int] = 5,
+        max_entropy_iterations: int = 2
+    ):   
         """
         Main function to run the benchmark.
 
@@ -281,6 +412,11 @@ class VLLMClient:
         - max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 16384.
         - temperature (float, optional): The temperature to use. Defaults to 0.6.
         - top_p (float, optional): The top-p to use. Defaults to 0.95.
+        - budget_mode (BudgetMode, optional): The budget mode to use. Defaults to BudgetMode.WAIT.
+        - entropy_threshold (Optional[float], optional): The entropy threshold to use. Defaults to 0.5.
+        - top_k (Optional[int], optional): The top-k tokens considered for calculating entropy. Defaults to 5.
+        - max_entropy_iterations (int, optional): 
+            The maximum number of iterations for entropy calculation. Defaults to 2.
 
         Returns:
         - None
@@ -292,36 +428,52 @@ class VLLMClient:
         else:
             raise ValueError(f"Unknown dataset type: {dataset_type}")
 
-        sampling_params = SamplingParams(
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            n = num_sample_responses,
-            skip_special_tokens=False
-        )
-
         gt_answers = []
         queries = []
 
-        dataset = dataset[:2]
         for row in tqdm(dataset, desc="Dataset row", total=len(dataset)):
             queries.append(row["query"])
             gt_answers.append(row["answer"])
 
         inputs = [self.tokenize_prompt(query) for query in queries]
         
-        total_generated_tokens, predicted_answers = self.query_with_extra_wait(
-            inputs, 
-            num_waits, 
-            sampling_params
-        )
-        
+        if budget_mode == BudgetMode.WAIT:
+            sampling_params = SamplingParams(
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                n = num_sample_responses,
+                skip_special_tokens=False
+            )
+            total_generated_tokens, predicted_answers = self.query_with_extra_wait(
+                inputs, 
+                num_waits, 
+                sampling_params
+            )
+        elif budget_mode == BudgetMode.ENTROPY:
+            sampling_params = SamplingParams(
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                n = num_sample_responses,
+                logprobs=top_k
+            )
+            total_generated_tokens, predicted_answers = self.query_with_entropy(
+                inputs, 
+                sampling_params,
+                entropy_threshold,
+                max_entropy_iterations
+            )
+        else:
+            raise ValueError(f"Unknown budget mode: {budget_mode}")
+
         self.compute_metrics(total_generated_tokens, predicted_answers, gt_answers)
 
     def compute_metrics(self, total_generated_tokens, predicted_answers, gt_answers):
         """
         Computes metrics for the given data and plot how accuracy 
             and average number of tokens change across samples.
+        Args:
         Args:
             total_generated_tokens (np.array): The total number of tokens generated.
             predicted_answers (List[List[str]]): The predicted answers.
@@ -335,7 +487,7 @@ class VLLMClient:
         gt_answers = np.array(gt_answers)
 
         # Average number of tokens per sample index
-        average_tokens_across_samples = np.mean(total_generated_tokens, axis=1)
+        average_tokens_across_samples = np.mean(total_generated_tokens, axis=0)
         logger.debug(f"Average number of tokens generated: {average_tokens_across_samples}")
         
         # Compute accuracy across sample index
@@ -368,11 +520,35 @@ if __name__ == "__main__":
         default=2, 
         help="Number of sample responses to generate"
     )
+    parser.add_argument(
+        "--budget_mode", 
+        type=BudgetMode, 
+        default=BudgetMode.WAIT.value, 
+        help="Budget mode has to be either wait or entropy",
+        choices=[BudgetMode.WAIT.value, BudgetMode.ENTROPY.value]
+    )
+    parser.add_argument(
+        "--entropy_threshold", 
+        type=float, 
+        default=0.5, 
+        help="Entropy threshold to use for entropy budget control"
+    )
+    parser.add_argument(
+        "--max_entropy_iterations", 
+        type=int, 
+        default=2, 
+        help="Maximum number of iterations for entropy calculation"
+    )
     args = parser.parse_args()
     if args.dataset_type == DatasetType.AIME.value:
         dataset_type = DatasetType.AIME
     elif args.dataset_type == DatasetType.MATH.value:
         dataset_type = DatasetType.MATH
+    
+    if args.budget_mode == BudgetMode.WAIT.value:
+        budget_mode = BudgetMode.WAIT
+    elif args.budget_mode == BudgetMode.ENTROPY.value:
+        budget_mode = BudgetMode.ENTROPY
 
     args = parser.parse_args()
     vllm_client = VLLMClient()
@@ -383,5 +559,8 @@ if __name__ == "__main__":
         max_tokens=args.max_tokens,
         temperature=args.temperature,
         top_p=args.top_p,
-        num_sample_responses=args.num_sample_responses
+        num_sample_responses=args.num_sample_responses,
+        budget_mode=budget_mode,
+        entropy_threshold=args.entropy_threshold,
+        max_entropy_iterations=args.max_entropy_iterations
     )
