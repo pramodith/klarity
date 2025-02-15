@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 from transformers import AutoTokenizer
 from tqdm import tqdm
 from typing import Dict, List
+from transformers.models import sam
 from vllm import LLM, SamplingParams
 from vllm.inputs.data import TokensPrompt
 
@@ -88,10 +89,10 @@ class VLLMClient:
                 return text[last_occurrence+len("boxed{"): end_pos]
             return ""
         except ValueError:
-            logger.error(f"Failed to parse {text}")
+            logger.error(f"Failed to parse {text[-1000:]}")
             return ""
     
-    def get_vllm_output(self, output_generation):
+    def get_vllm_output(self, vllm_response: List):
         """
         Get the output of the model.
 
@@ -104,10 +105,11 @@ class VLLMClient:
         generated_texts = []
         num_generated_tokens = []
         
-        for i in range(len(output_generation.outputs)):
-            generated_texts.append(output_generation.outputs[i].text)
-            num_generated_tokens.append(len(output_generation.outputs[i].token_ids))
-        
+        for prompt_ind in range(len(vllm_response)):
+            for sample_ind in range(len(vllm_response[prompt_ind].outputs)):
+                generated_texts.append(vllm_response[prompt_ind].outputs[sample_ind].text)
+                num_generated_tokens.append(len(vllm_response[prompt_ind].outputs[sample_ind].token_ids))
+            
         return generated_texts, num_generated_tokens
 
     def query_with_extra_wait(
@@ -136,48 +138,51 @@ class VLLMClient:
             stop = [self.THINK_END_STR]
 
         sampling_params.stop = stop
-
+        num_samples = sampling_params.n
         # Tokenize prompt
-        num_generated_tokens = []
-        predicted_answers = []
+        num_generated_tokens = np.zeros((len(prompts), num_samples), dtype=int)
+        predicted_answers = [["" for _ in range(num_samples)] for _ in range(len(prompts))]
+        entire_chat_history = ""
+
         for ind, prompt in enumerate(prompts):
-            input_text = prompt
-            num_generated_tokens.append([])
-            predicted_answers.append([])
-            for wait_ind in range(num_waits+1):
-                if wait_ind == num_waits:
-                    # If this is the last wait, set stop to None to ensure full generation
-                    sampling_params.stop = None
-                try:
-                    # Generate text using the model
-                    outputs = self.model.generate(input_text, sampling_params=sampling_params)
-                    
-                    # Process model outputs
-                    processed_outputs = [self.get_vllm_output(output) for output in outputs][0]
-                    generated_texts, token_counts = processed_outputs
-                    
-                    # Add wait string if needed
-                    if wait_ind < num_waits:
-                        input_text = [input_text + text.rstrip(self.THINK_END_STR) + self.WAIT_STR for text in generated_texts]
-                    else:
-                        input_text = [input_text[i] + generated_texts[i] for i in range(len(generated_texts))]
-                    logger.info(f"Prefix of input is {input_text[0][:1000]}")
-                    num_generated_tokens[ind].append(list(token_counts))
-                    generated_texts = input_text
-                    
-                except Exception as e:
-                    # Log the error and handle gracefully
-                    logger.error(f"Error during text generation: {str(e)}")
-                    batch_size = len(prompt)
-                    num_generated_tokens[ind].append([-1] * batch_size)
+            sampling_params.n = num_samples
+            input_text = [prompt]
+            # Get first n reasoning trajectories
+            outputs = self.model.generate(input_text, sampling_params=sampling_params)
+            generated_texts, token_counts = self.get_vllm_output(outputs)
+            num_generated_tokens[ind] += token_counts
+            predicted_answers[ind] = generated_texts
+            for sample_ind in range(num_samples):
+                entire_chat_history = predicted_answers[ind][sample_ind].rstrip(self.THINK_END_STR) + self.WAIT_STR
+                sampling_params.n = 1
+                for wait_ind in range(num_waits):
+                    if wait_ind == num_waits-1:
+                        # If this is the last wait, set stop to None to ensure full generation
+                        sampling_params.stop = None
+                    try:
+                        # Generate text using the model
+                        outputs = self.model.generate(entire_chat_history, sampling_params=sampling_params)
+                        
+                        # Process model outputs
+                        generated_texts, token_counts = self.get_vllm_output(outputs)
+                        num_generated_tokens[ind][sample_ind] += token_counts[0]
+                        
+                        # TODO: only consider the last generation
+                        predicted_answers[ind][sample_ind] = entire_chat_history + generated_texts[0]
+                        entire_chat_history += generated_texts[0].rstrip(self.THINK_END_STR) + self.WAIT_STR
 
-            # We want to find the total number of tokens generated per input prompt so we need to sum
-            # along the wait axis.
-            predicted_answers.append([self.extract_answer(text) for text in generated_texts])
+                        logger.info(f"Prefix for wait: {wait_ind} of input is {entire_chat_history[:500]}")
+                        logger.info(f"Suffix for wait: {wait_ind} of input is {entire_chat_history[-200:]}")
+                        
+                    except Exception as e:
+                        # Log the error and handle gracefully
+                        logger.error(f"Error during text generation: {str(e)}")
+                        predicted_answers[ind][sample_ind] = ""
+                        num_generated_tokens[ind][sample_ind] = -float("inf")
 
-        num_generated_tokens = np.array(num_generated_tokens).sum(2)
-        # Get the entire generated text and the total generated token count
-        return sum(num_generated_tokens), predicted_answers
+        # Get total number of tokens generated per sampled response i.e sum along wait axis
+        predicted_answers = [[self.extract_answer(predicted_answers[prompt_ind][sample_ind]) for sample_ind in range(len(predicted_answers[prompt_ind]))] for prompt_ind in range(len(predicted_answers))]
+        return num_generated_tokens, predicted_answers
     
     def load_aime_dataset(self, dataset_path: str = "HuggingFaceH4/aime_2024") -> List[Dict[str, str]]:
         """
@@ -298,6 +303,7 @@ class VLLMClient:
         gt_answers = []
         queries = []
 
+        dataset = dataset[:2]
         for row in tqdm(dataset, desc="Dataset row", total=len(dataset)):
             queries.append(row["query"])
             gt_answers.append(row["answer"])
@@ -317,7 +323,7 @@ class VLLMClient:
         Computes metrics for the given data and plot how accuracy 
             and average number of tokens change across samples.
         Args:
-            total_generated_tokens (List[List[int]]): The total number of tokens generated.
+            total_generated_tokens (np.array): The total number of tokens generated.
             predicted_answers (List[List[str]]): The predicted answers.
             gt_answers (List[List[str]]): The ground truth answers.
         Returns:
@@ -333,18 +339,19 @@ class VLLMClient:
         logger.debug(f"Average number of tokens generated: {average_tokens_across_samples}")
         
         # Compute accuracy across sample index
-        accuracy_per_sample_ind = [self.compute_math_accuracy(pred[:,ind], gt[:,ind]) for ind in range (len(predicted_answers[0]))]
+        accuracy_per_sample_ind = [self.compute_math_accuracy(predicted_answers[:, i], gt_answers) for i in range(len(predicted_answers[0]))]
         logger.debug(f"Accuracy per sample index: {accuracy_per_sample_ind}")
         
         pass_1 = np.mean(accuracy_per_sample_ind) * 100
-        logger.debug(f"Pass@1 for {num_sample_responses}: {pass_1}%")
+        logger.debug(f"Pass@1 for {len(predicted_answers[0])}: {pass_1}%")
     
         self.plot_benchmarks(accuracy_per_sample_ind, average_tokens_across_samples)
+        return accuracy_per_sample_ind, average_tokens_across_samples, pass_1
     
 if __name__ == "__main__":
     # Accept args from the user 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_waits", type=int, default=0, help="Number of extra waits to add")
+    parser.add_argument("--num_waits", type=int, default=1, help="Number of extra waits to add")
     parser.add_argument("--max_tokens", type=int, default=16384, help="Max tokens for the query")
     parser.add_argument("--temperature", type=float, default=0.6, help="Temperature for the query")
     parser.add_argument("--top_p", type=float, default=0.95, help="Top p for the query")
@@ -358,7 +365,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_sample_responses", 
         type=int, 
-        default=4, 
+        default=2, 
         help="Number of sample responses to generate"
     )
     args = parser.parse_args()

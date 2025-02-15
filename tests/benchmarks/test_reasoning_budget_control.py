@@ -181,24 +181,139 @@ class TestVLLMClient(unittest.TestCase):
                     gt_answers=[["4", "4"]]
                 )
 
-    def test_compute_metrics_array_conversion(self):
-        """Test compute_metrics properly converts inputs to numpy arrays"""
-        total_generated_tokens = [[10, 15]]
-        predicted_answers = [["4", "4"]]
-        gt_answers = [["4", "4"]]
+    def test_compute_metrics_perfect_predictions(self):
+        """Test compute_metrics with perfect predictions"""
+        total_generated_tokens = [[10, 15], [12, 18]]  # 2 prompts, 2 responses each
+        predicted_answers = [["4", "4"], ["16", "16"]]  # 2 prompts, 2 responses each
+        gt_answers = [["4", "4"], ["16", "16"]]  # 2 prompts, 2 responses each
         
-        with patch.object(self.client, 'plot_benchmarks') as mock_plot:
-            with patch.object(self.client, 'compute_math_accuracy', return_value=1.0):
+        with patch.object(self.client, 'plot_benchmarks'):
+            accuracies, avg_tokens, pass_1 = self.client.compute_metrics(
+                total_generated_tokens=total_generated_tokens,
+                predicted_answers=predicted_answers,
+                gt_answers=gt_answers
+            )
+            
+            # Check accuracies for each sample
+            self.assertEqual(len(accuracies), 2)  # Two samples
+            self.assertTrue(all(acc == 1.0 for acc in accuracies))  # All predictions correct
+            
+            # Check average tokens
+            expected_avg_tokens = np.array([11, 16.5])  # Average of columns
+            np.testing.assert_array_almost_equal(avg_tokens, expected_avg_tokens)
+            
+            # Check pass@1 score
+            self.assertEqual(pass_1, 100.0)
+
+    def test_compute_metrics_mixed_predictions(self):
+        """Test compute_metrics with a mix of correct and incorrect predictions"""
+        total_generated_tokens = [[10, 15], [12, 18], [20, 25]]  # 3 samples, 2 responses each
+        predicted_answers = [["4", "5"], ["16", "16"], ["25", "24"]]  # Some wrong answers
+        gt_answers = [["4", "4"], ["16", "16"], ["25", "25"]]
+        
+        with patch.object(self.client, 'plot_benchmarks'):
+            accuracies, avg_tokens, pass_1 = self.client.compute_metrics(
+                total_generated_tokens=total_generated_tokens,
+                predicted_answers=predicted_answers,
+                gt_answers=gt_answers
+            )
+            
+            # Check accuracies
+            expected_accuracies = [0.5, 1.0, 0.5]  # First and last samples have one wrong answer
+            np.testing.assert_array_almost_equal(accuracies, expected_accuracies)
+            
+            # Check average tokens
+            expected_avg_tokens = np.array([12.5, 15.0, 22.5])  # Average of each pair
+            np.testing.assert_array_almost_equal(avg_tokens, expected_avg_tokens)
+            
+            # Check pass@1 score (average of accuracies * 100)
+            self.assertEqual(pass_1, (0.5 + 1.0 + 0.5) / 3 * 100)
+
+    def test_compute_metrics_empty_inputs(self):
+        """Test compute_metrics with empty inputs"""
+        with patch.object(self.client, 'plot_benchmarks'):
+            with self.assertRaises(ValueError):
                 self.client.compute_metrics(
-                    total_generated_tokens=total_generated_tokens,
-                    predicted_answers=predicted_answers,
-                    gt_answers=gt_answers
+                    total_generated_tokens=[],
+                    predicted_answers=[],
+                    gt_answers=[]
                 )
-                
-                # Verify numpy array conversion
-                tokens_arg = mock_plot.call_args[0][1]
-                self.assertIsInstance(tokens_arg, np.ndarray)
-                self.assertEqual(tokens_arg.shape, (1,))  # One sample
+
+    def test_compute_metrics_mismatched_shapes(self):
+        """Test compute_metrics with mismatched input shapes"""
+        cases = [
+            # Different number of samples
+            ([
+                [[10, 15]],  # 1 sample
+                [["4", "4"], ["16", "16"]],  # 2 samples
+                [["4", "4"], ["16", "16"]]  # 2 samples
+            ]),
+            # Different number of responses
+            ([
+                [[10], [12]],  # 2 samples, 1 response each
+                [["4", "4"], ["16", "16"]],  # 2 samples, 2 responses each
+                [["4", "4"], ["16", "16"]]  # 2 samples, 2 responses each
+            ])
+        ]
+        
+        with patch.object(self.client, 'plot_benchmarks'):
+            for tokens, preds, gts in cases:
+                with self.subTest(tokens=tokens, preds=preds, gts=gts):
+                    with self.assertRaises(ValueError):
+                        self.client.compute_metrics(
+                            total_generated_tokens=tokens,
+                            predicted_answers=preds,
+                            gt_answers=gts
+                        )
+
+    def test_get_vllm_output_single_prompt_single_sample(self):
+        """Test get_vllm_output with a single prompt and single sample"""
+        mock_prompt_output = MockOutputGeneration("Test text", [1, 2, 3], 3)
+        
+        generated_texts, num_tokens = self.client.get_vllm_output([mock_prompt_output])
+        
+        self.assertEqual(generated_texts, ["Test text"])
+        self.assertEqual(num_tokens, [3])
+
+    def test_get_vllm_output_multiple_prompts(self):
+        """Test get_vllm_output with multiple prompts"""
+        mock_outputs = [
+            MockOutputGeneration("Prompt 1", [1, 2], 2),
+            MockOutputGeneration("Prompt 2", [3, 4, 5], 3)
+        ]
+        
+        generated_texts, num_tokens = self.client.get_vllm_output(mock_outputs)
+        
+        self.assertEqual(generated_texts, ["Prompt 1", "Prompt 2"])
+        self.assertEqual(num_tokens, [2, 3])
+
+    def test_get_vllm_output_empty_outputs(self):
+        """Test get_vllm_output with empty outputs"""
+        generated_texts, num_tokens = self.client.get_vllm_output([])
+        
+        self.assertEqual(generated_texts, [])
+        self.assertEqual(num_tokens, [])
+
+    def test_get_vllm_output_multiple_prompts_multiple_samples(self):
+        """Test get_vllm_output with multiple prompts, each having multiple samples"""
+        # Create mock outputs for first prompt with 2 samples
+        mock_output1_1 = MockOutput("P1S1", [1, 2], 2)
+        mock_output1_2 = MockOutput("P1S2", [3, 4], 2)
+        mock_prompt1 = MockOutputGeneration("P1S1", [1, 2], 2)
+        mock_prompt1.outputs = [mock_output1_1, mock_output1_2]
+
+        # Create mock outputs for second prompt with 2 samples
+        mock_output2_1 = MockOutput("P2S1", [5, 6], 2)
+        mock_output2_2 = MockOutput("P2S2", [7, 8, 9], 3)
+        mock_prompt2 = MockOutputGeneration("P2S1", [5, 6], 2)
+        mock_prompt2.outputs = [mock_output2_1, mock_output2_2]
+
+        # Test with both prompts
+        generated_texts, num_tokens = self.client.get_vllm_output([mock_prompt1, mock_prompt2])
+
+        # Verify the results
+        self.assertEqual(generated_texts, ["P1S1", "P1S2", "P2S1", "P2S2"])
+        self.assertEqual(num_tokens, [2, 2, 2, 3])
 
 
 if __name__ == "__main__":
