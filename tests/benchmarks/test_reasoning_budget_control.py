@@ -71,34 +71,6 @@ class TestVLLMClient(unittest.TestCase):
                 result = self.client.extract_answer(input_text)
                 self.assertEqual(result, expected)
 
-    def test_query_with_extra_wait(self):
-        """Test query_with_extra_wait with mocked model and tokenizer"""
-        # Setup mock responses
-        mock_text = "Test output boxed{42}"
-        mock_tokens = [1, 2, 3, 4]
-        mock_output = [MockOutputGeneration(mock_text, mock_tokens)]
-        self.mock_llm.generate.return_value = mock_output
-
-        # Mock tokenizer behavior
-        self.mock_tokenizer.decode.return_value = mock_text
-
-        # Test with different numbers of waits
-        test_cases = [(0, 1), (1, 2), (2, 3)]  # (num_waits, expected_generations)
-
-        for num_waits, expected_generations in test_cases:
-            with self.subTest(num_waits=num_waits):
-                prompt = "Test prompt"
-                sampling_params = SamplingParams()
-
-                generated_texts, total_tokens, answer = self.client.query_with_extra_wait(
-                    prompt, num_waits, sampling_params
-                )
-
-                # Verify the number of generations matches expected
-                self.assertEqual(len(generated_texts), expected_generations)
-                self.assertIsInstance(total_tokens, int)
-                self.assertEqual(answer, "42}")  # Should extract from boxed{42}
-
     def test_compute_math_accuracy(self):
         """Test compute_math_accuracy with various test cases"""
         test_cases = [

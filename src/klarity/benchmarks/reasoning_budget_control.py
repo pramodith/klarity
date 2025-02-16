@@ -36,7 +36,7 @@ class VLLMClient:
     def __init__(
         self,
         model: str = "agentica-org/DeepScaleR-1.5B-Preview",
-        tensor_parallel_size: int = 1,
+        tensor_parallel_size: int = 4,
     ):
         self.model = LLM(
             model,
@@ -428,7 +428,7 @@ class VLLMClient:
 
         plt.title("Benchmark Results - " + dataset_type.value + "using " + mode.value + " for budgeting.")
         plt.tight_layout(pad=3.0)
-        fig.savefig("plots/accuracy_vs_tokens.png")
+        fig.savefig(f"plots/{mode.value}_{dataset_type.value}_accuracy_vs_tokens.png")
 
     def main(
         self,
@@ -470,7 +470,6 @@ class VLLMClient:
 
         gt_answers = []
         queries = []
-        dataset = dataset[:2]
 
         for row in tqdm(dataset, desc="Dataset row", total=len(dataset)):
             queries.append(row["query"])
@@ -557,11 +556,11 @@ if __name__ == "__main__":
         help="Dataset type has to be either aime or math",
         choices=[DatasetType.AIME.value, DatasetType.MATH.value],
     )
-    parser.add_argument("--num_sample_responses", type=int, default=2, help="Number of sample responses to generate")
+    parser.add_argument("--num_sample_responses", type=int, default=4, help="Number of sample responses to generate")
     parser.add_argument(
         "--budget_mode",
         type=BudgetMode,
-        default=BudgetMode.ENTROPY.value,
+        default=BudgetMode.WAIT.value,
         help="Budget mode has to be either wait or entropy",
         choices=[BudgetMode.WAIT.value, BudgetMode.ENTROPY.value],
     )
