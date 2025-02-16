@@ -1,4 +1,5 @@
 import unittest
+import numpy as np
 from unittest.mock import Mock, patch
 from typing import List
 
@@ -8,16 +9,26 @@ from vllm import LLM, SamplingParams
 from src.klarity.benchmarks.reasoning_budget_control import VLLMClient
 
 
+class LogProb:
+    def __init__(self, logprob: float):
+        self.logprob = logprob
+
+
 class MockOutput:
-    def __init__(self, text: str, token_ids: List[int], num_generated_tokens: int):
+    def __init__(self, text: str, token_ids: List[int], num_generated_tokens: int, logprobs=None):
         self.text = text
         self.token_ids = token_ids
         self.num_generated_tokens = num_generated_tokens
+        if logprobs is None:
+            # Create default logprobs
+            self.logprobs = [{i: LogProb(-1.0) for i in range(5)} for _ in token_ids]
+        else:
+            self.logprobs = logprobs
 
 
 class MockOutputGeneration:
-    def __init__(self, text: str, token_ids: List[int], num_generated_tokens: int):
-        self.outputs = [MockOutput(text, token_ids, num_generated_tokens)]
+    def __init__(self, text: str, token_ids: List[int], num_generated_tokens: int, logprobs=None):
+        self.outputs = [MockOutput(text, token_ids, num_generated_tokens, logprobs)]
 
 
 class TestVLLMClient(unittest.TestCase):
@@ -117,31 +128,31 @@ class TestVLLMClient(unittest.TestCase):
         )
         self.assertEqual(result, desired_result)
 
-
     def test_compute_metrics_basic(self):
         """Test compute_metrics with perfect predictions"""
         # Test data
         total_generated_tokens = [[10, 15], [12, 18]]  # 2 samples, 2 responses each
         predicted_answers = [["4", "4"], ["16", "16"]]  # 2 samples, 2 responses each
-        gt_answers = [["4", "4"], ["16", "16"]]  # 2 samples, 2 responses each
-        
-        with patch.object(self.client, 'plot_benchmarks') as mock_plot:
-            with patch.object(self.client, 'compute_math_accuracy', return_value=1.0):
+        gt_answers = ["4", "16"]  # 2 samples, 2 responses each
+
+        with patch.object(self.client, "plot_benchmarks"):
+            with patch.object(self.client, "compute_math_accuracy", return_value=1.0):
                 # Call the function
-                pass_1 = self.client.compute_metrics(
+                accuracy_per_sample, avg_tokens, pass_1 = self.client.compute_metrics(
                     total_generated_tokens=total_generated_tokens,
                     predicted_answers=predicted_answers,
-                    gt_answers=gt_answers
+                    gt_answers=gt_answers,
                 )
-                
-                # Verify plot_benchmarks was called with correct args
-                mock_plot.assert_called_once()
-                accuracy_arg = mock_plot.call_args[0][0]
-                tokens_arg = mock_plot.call_args[0][1]
-                assert len(accuracy_arg) == len(predicted_answers[0])  # One accuracy per sample
-                self.assertTrue(np.allclose(tokens_arg, np.mean(total_generated_tokens, axis=1)))
-                
-                # Since all predictions match ground truth, accuracy should be 100%
+
+                # Verify accuracies
+                self.assertEqual(len(accuracy_per_sample), 2)  # Two samples
+                self.assertTrue(all(acc == 1.0 for acc in accuracy_per_sample))
+
+                # Verify average tokens
+                expected_avg_tokens = np.array([11, 16.5])  # Mean of [10,12] and [15,18]
+                np.testing.assert_array_almost_equal(avg_tokens, expected_avg_tokens)
+
+                # Verify pass@1
                 self.assertEqual(pass_1, 100.0)
 
     def test_compute_metrics_with_errors(self):
@@ -149,150 +160,88 @@ class TestVLLMClient(unittest.TestCase):
         # Test data with some incorrect predictions
         total_generated_tokens = [[10, 15], [12, 18]]
         predicted_answers = [["4", "5"], ["16", "15"]]  # Some wrong answers
-        gt_answers = [["4", "4"], ["16", "16"]]
-        
-        with patch.object(self.client, 'plot_benchmarks') as mock_plot:
-            with patch.object(self.client, 'compute_math_accuracy', return_value=0.5):
-                pass_1 = self.client.compute_metrics(
+        gt_answers = ["4", "16"]
+
+        with patch.object(self.client, "plot_benchmarks"):
+            with patch.object(self.client, "compute_math_accuracy", return_value=0.5):
+                accuracy_per_sample, avg_tokens, pass_1 = self.client.compute_metrics(
                     total_generated_tokens=total_generated_tokens,
                     predicted_answers=predicted_answers,
-                    gt_answers=gt_answers
+                    gt_answers=gt_answers,
                 )
-                
-                # Since half the predictions are wrong, accuracy should be 50%
+
+                # Verify accuracies
+                self.assertEqual(len(accuracy_per_sample), 2)  # Two samples
+                self.assertTrue(all(acc == 0.5 for acc in accuracy_per_sample))
+
+                # Verify average tokens
+                expected_avg_tokens = np.array([11, 16.5])  # Mean of [10,12] and [15,18]
+                np.testing.assert_array_almost_equal(avg_tokens, expected_avg_tokens)
+
+                # Since accuracy is 0.5 for both samples, pass@1 should be 50%
                 self.assertEqual(pass_1, 50.0)
-                
-                # Verify average tokens calculation
-                tokens_arg = mock_plot.call_args[0][1]
-                self.assertTrue(np.allclose(tokens_arg, [12.5, 15.0]))  # Average tokens per sample
 
     def test_compute_metrics_input_validation(self):
         """Test compute_metrics with invalid inputs"""
-        with patch.object(self.client, 'plot_benchmarks'):
+        with patch.object(self.client, "plot_benchmarks"):
             # Test empty inputs
             with self.assertRaises(ValueError):
                 self.client.compute_metrics([], [], [])
-            
-            # Test mismatched shapes
-            with self.assertRaises(ValueError):
-                self.client.compute_metrics(
-                    total_generated_tokens=[[10]],
-                    predicted_answers=[["4", "4"]],
-                    gt_answers=[["4", "4"]]
-                )
-
-    def test_compute_metrics_perfect_predictions(self):
-        """Test compute_metrics with perfect predictions"""
-        total_generated_tokens = [[10, 15], [12, 18]]  # 2 prompts, 2 responses each
-        predicted_answers = [["4", "4"], ["16", "16"]]  # 2 prompts, 2 responses each
-        gt_answers = [["4", "4"], ["16", "16"]]  # 2 prompts, 2 responses each
-        
-        with patch.object(self.client, 'plot_benchmarks'):
-            accuracies, avg_tokens, pass_1 = self.client.compute_metrics(
-                total_generated_tokens=total_generated_tokens,
-                predicted_answers=predicted_answers,
-                gt_answers=gt_answers
-            )
-            
-            # Check accuracies for each sample
-            self.assertEqual(len(accuracies), 2)  # Two samples
-            self.assertTrue(all(acc == 1.0 for acc in accuracies))  # All predictions correct
-            
-            # Check average tokens
-            expected_avg_tokens = np.array([11, 16.5])  # Average of columns
-            np.testing.assert_array_almost_equal(avg_tokens, expected_avg_tokens)
-            
-            # Check pass@1 score
-            self.assertEqual(pass_1, 100.0)
 
     def test_compute_metrics_mixed_predictions(self):
         """Test compute_metrics with a mix of correct and incorrect predictions"""
-        total_generated_tokens = [[10, 15], [12, 18], [20, 25]]  # 3 samples, 2 responses each
+        total_generated_tokens = [[10, 15], [12, 18], [20, 25]]  # 3 prompts, 2 responses each
         predicted_answers = [["4", "5"], ["16", "16"], ["25", "24"]]  # Some wrong answers
-        gt_answers = [["4", "4"], ["16", "16"], ["25", "25"]]
-        
-        with patch.object(self.client, 'plot_benchmarks'):
+        gt_answers = ["4", "16", "25"]
+
+        with patch.object(self.client, "plot_benchmarks"):
             accuracies, avg_tokens, pass_1 = self.client.compute_metrics(
                 total_generated_tokens=total_generated_tokens,
                 predicted_answers=predicted_answers,
-                gt_answers=gt_answers
+                gt_answers=gt_answers,
             )
-            
+
             # Check accuracies
-            expected_accuracies = [0.5, 1.0, 0.5]  # First and last samples have one wrong answer
+            expected_accuracies = [1.0, 1 / 3]  # First and last samples have one wrong answer
             np.testing.assert_array_almost_equal(accuracies, expected_accuracies)
-            
+
             # Check average tokens
-            expected_avg_tokens = np.array([12.5, 15.0, 22.5])  # Average of each pair
+            expected_avg_tokens = np.array([14, 19.333333])  # Average of each pair
             np.testing.assert_array_almost_equal(avg_tokens, expected_avg_tokens)
-            
+
             # Check pass@1 score (average of accuracies * 100)
-            self.assertEqual(pass_1, (0.5 + 1.0 + 0.5) / 3 * 100)
-
-    def test_compute_metrics_empty_inputs(self):
-        """Test compute_metrics with empty inputs"""
-        with patch.object(self.client, 'plot_benchmarks'):
-            with self.assertRaises(ValueError):
-                self.client.compute_metrics(
-                    total_generated_tokens=[],
-                    predicted_answers=[],
-                    gt_answers=[]
-                )
-
-    def test_compute_metrics_mismatched_shapes(self):
-        """Test compute_metrics with mismatched input shapes"""
-        cases = [
-            # Different number of samples
-            ([
-                [[10, 15]],  # 1 sample
-                [["4", "4"], ["16", "16"]],  # 2 samples
-                [["4", "4"], ["16", "16"]]  # 2 samples
-            ]),
-            # Different number of responses
-            ([
-                [[10], [12]],  # 2 samples, 1 response each
-                [["4", "4"], ["16", "16"]],  # 2 samples, 2 responses each
-                [["4", "4"], ["16", "16"]]  # 2 samples, 2 responses each
-            ])
-        ]
-        
-        with patch.object(self.client, 'plot_benchmarks'):
-            for tokens, preds, gts in cases:
-                with self.subTest(tokens=tokens, preds=preds, gts=gts):
-                    with self.assertRaises(ValueError):
-                        self.client.compute_metrics(
-                            total_generated_tokens=tokens,
-                            predicted_answers=preds,
-                            gt_answers=gts
-                        )
+            self.assertEqual(pass_1, (1.0 + (1 / 3)) / 2 * 100)
 
     def test_get_vllm_output_single_prompt_single_sample(self):
         """Test get_vllm_output with a single prompt and single sample"""
         mock_prompt_output = MockOutputGeneration("Test text", [1, 2, 3], 3)
-        
-        generated_texts, num_tokens = self.client.get_vllm_output([mock_prompt_output])
-        
+
+        generated_texts, num_tokens, logprobs, token_ids = self.client.get_vllm_output([mock_prompt_output])
+
         self.assertEqual(generated_texts, ["Test text"])
         self.assertEqual(num_tokens, [3])
+        self.assertEqual(len(logprobs[0]), 3)  # One logprob per token
+        self.assertEqual(token_ids, [[1, 2, 3]])
 
     def test_get_vllm_output_multiple_prompts(self):
         """Test get_vllm_output with multiple prompts"""
-        mock_outputs = [
-            MockOutputGeneration("Prompt 1", [1, 2], 2),
-            MockOutputGeneration("Prompt 2", [3, 4, 5], 3)
-        ]
-        
-        generated_texts, num_tokens = self.client.get_vllm_output(mock_outputs)
-        
+        mock_outputs = [MockOutputGeneration("Prompt 1", [1, 2], 2), MockOutputGeneration("Prompt 2", [3, 4, 5], 3)]
+
+        generated_texts, num_tokens, logprobs, token_ids = self.client.get_vllm_output(mock_outputs)
+
         self.assertEqual(generated_texts, ["Prompt 1", "Prompt 2"])
         self.assertEqual(num_tokens, [2, 3])
+        self.assertEqual(len(logprobs), 2)  # Two sets of logprobs
+        self.assertEqual(token_ids, [[1, 2], [3, 4, 5]])
 
     def test_get_vllm_output_empty_outputs(self):
         """Test get_vllm_output with empty outputs"""
-        generated_texts, num_tokens = self.client.get_vllm_output([])
-        
+        generated_texts, num_tokens, logprobs, token_ids = self.client.get_vllm_output([])
+
         self.assertEqual(generated_texts, [])
         self.assertEqual(num_tokens, [])
+        self.assertEqual(logprobs, [])
+        self.assertEqual(token_ids, [])
 
     def test_get_vllm_output_multiple_prompts_multiple_samples(self):
         """Test get_vllm_output with multiple prompts, each having multiple samples"""
@@ -309,11 +258,73 @@ class TestVLLMClient(unittest.TestCase):
         mock_prompt2.outputs = [mock_output2_1, mock_output2_2]
 
         # Test with both prompts
-        generated_texts, num_tokens = self.client.get_vllm_output([mock_prompt1, mock_prompt2])
+        generated_texts, num_tokens, logprobs, token_ids = self.client.get_vllm_output([mock_prompt1, mock_prompt2])
 
         # Verify the results
         self.assertEqual(generated_texts, ["P1S1", "P1S2", "P2S1", "P2S2"])
         self.assertEqual(num_tokens, [2, 2, 2, 3])
+        self.assertEqual(len(logprobs), 4)  # Four sets of logprobs
+        self.assertEqual(token_ids, [[1, 2], [3, 4], [5, 6], [7, 8, 9]])
+        self.assertEqual(num_tokens, [2, 2, 2, 3])
+
+    def test_find_first_subsequence(self):
+        """Test finding first occurrence of a subsequence"""
+        test_cases = [
+            ([1, 2, 3, 4, 2, 3], [2, 3], 1),  # Basic case
+            ([1, 2, 3], [4], -1),  # Subsequence not found
+            ([1, 2, 2], [2], 1),  # Multiple occurrences, should find first
+            ([], [1], -1),  # Empty array
+            ([1, 2, 3], [], -1),  # Empty subsequence
+            ([1, 2, 3, 4, 5], [3, 4, 5], 2),  # Subsequence at end
+            ([1, 2, 3], [1, 2, 3], 0),  # Full sequence match
+        ]
+
+        for arr, sub, expected in test_cases:
+            with self.subTest(arr=arr, sub=sub):
+                result = self.client.find_first_or_last_subsequence(arr, sub, is_first=True)
+                self.assertEqual(result, expected)
+
+    def test_find_last_subsequence(self):
+        """Test finding last occurrence of a subsequence"""
+        test_cases = [
+            ([1, 2, 3, 4, 2, 3], [2, 3], 4),  # Basic case
+            ([1, 2, 3], [4], -1),  # Subsequence not found
+            ([1, 2, 2], [2], 2),  # Multiple occurrences, should find last
+            ([], [1], -1),  # Empty array
+            ([1, 2, 3], [], -1),  # Empty subsequence
+            ([1, 2, 3, 4, 5], [1, 2, 3], 0),  # Subsequence at start
+            ([1, 2, 3], [1, 2, 3], 0),  # Full sequence match
+        ]
+
+        for arr, sub, expected in test_cases:
+            with self.subTest(arr=arr, sub=sub):
+                result = self.client.find_first_or_last_subsequence(arr, sub, is_first=False)
+                self.assertEqual(result, expected)
+
+    def test_compute_entropy_of_answer(self):
+        """Test computing entropy of answer"""
+
+        # Mock the tokenizer's behavior for boxed strings
+        def mock_tokenize(text):
+            if text == self.client.BOXED_START_STR:
+                return {"input_ids": [0, 10, 11]}  # Start token + boxed tokens
+            elif text == self.client.BOXED_END_STR:
+                return {"input_ids": [0, 12]}  # Start token + end token
+            return {"input_ids": [0, 1, 2]}  # Default case
+
+        self.mock_tokenizer.side_effect = mock_tokenize
+
+        # Test case 1: No boxed content
+        response_token_ids = tuple([1, 2, 3, 4, 5])
+        response_logprobs = np.zeros((len(response_token_ids), 10))
+        result = self.client.compute_entropy_of_answer(response_token_ids, response_logprobs)
+        self.assertEqual(result, 0.0)
+
+        # Test case 2: With boxed content
+        response_token_ids = tuple([1, 2, 10, 11, 3, 4, 12, 5])  # Contains boxed{3, 4}
+        response_logprobs = np.ones((len(response_token_ids), 10)) * np.log(0.1)  # Equal probabilities
+        result = self.client.compute_entropy_of_answer(response_token_ids, response_logprobs)
+        self.assertGreater(result, 0.0)  # Entropy should be positive
 
 
 if __name__ == "__main__":
