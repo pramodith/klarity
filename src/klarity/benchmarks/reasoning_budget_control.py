@@ -28,7 +28,9 @@ class VLLMClient:
     WAIT_STR: str = " Wait, "
     THINK_START_STR = "<think>"
     THINK_END_STR = "</think>"
-    BOXED_START_STR = "\\boxed{"
+    BOXED_START_STR = " \\boxed{"
+    BOXED_END_STR = "}"
+
     def __init__(
         self, 
         model:str = "agentica-org/DeepScaleR-1.5B-Preview", 
@@ -112,14 +114,20 @@ class VLLMClient:
         generated_texts = []
         num_generated_tokens = []
         logprobs = []
+        token_ids = []
 
         for prompt_ind in range(len(vllm_response)):
             for sample_ind in range(len(vllm_response[prompt_ind].outputs)):
                 generated_texts.append(vllm_response[prompt_ind].outputs[sample_ind].text)
+                token_ids.append(vllm_response[prompt_ind].outputs[sample_ind].token_ids)
                 num_generated_tokens.append(len(vllm_response[prompt_ind].outputs[sample_ind].token_ids))
-                logprobs.append(vllm_response[prompt_ind].outputs[sample_ind].logprobs)
+                lgps = []
+                for logprob in vllm_response[prompt_ind].outputs[sample_ind].logprobs:
+                    lgp = [lg.logprob for lg in logprob.values()]
+                    lgps.append(lgp)
+                logprobs.append(lgps)
 
-        return generated_texts, num_generated_tokens, logprobs
+        return generated_texts, num_generated_tokens, logprobs, token_ids
     
 
     def find_first_or_last_subsequence(self, arr: List[int], sub: List[int], is_first=False) -> int:
@@ -135,8 +143,9 @@ class VLLMClient:
         """
         step = 1 if is_first else -1
         start = 0 if is_first else len(arr) - len(sub)
+        end = len(arr) - len(sub) if is_first else 0
 
-        for i in range(start, len(arr) - len(sub) + 1 if is_first else -1, step):
+        for i in range(start, end, step):
             if arr[i:i+len(sub)] == sub:
                 return i
         return -1
@@ -157,8 +166,10 @@ class VLLMClient:
         Returns:
             float: The entropy of the answer.
         """
-        boxed_tokens = self.tokenizer(self.BOXED_START_STR)
-        boxed_end_tokens = self.tokenizer(self.BOXED_END_STR)
+
+        # We need to skip the start_of_sequence special token
+        boxed_tokens = tuple(self.tokenizer(self.BOXED_START_STR)["input_ids"][1:])
+        boxed_end_tokens = tuple(self.tokenizer(self.BOXED_END_STR)["input_ids"][1:])
         
         # Find the most recent boxed tokens sequence in response
         last_boxed_start_index = self.find_first_or_last_subsequence(
@@ -173,8 +184,8 @@ class VLLMClient:
 
         # Compute entropy of the answer
         all_entropies = []
-        for token_ind in range(last_boxed_start_index + len(boxed_tokens) - 1, last_boxed_end_index):
-            step_logprobs = response_logprobs[token_ind].item()
+        for token_ind in range(last_boxed_start_index + len(boxed_tokens), last_boxed_start_index + last_boxed_end_index):
+            step_logprobs = np.exp(response_logprobs[token_ind])
             entropy = self.entropy_analyzer._calculate_raw_entropy(step_logprobs)
             all_entropies.append(entropy)
 
@@ -187,13 +198,13 @@ class VLLMClient:
         sampling_params: SamplingParams = SamplingParams(), 
         entropy_threshold: float = 0.5,
         max_entropy_iterations: int = 2,
-        top_k: int = 5
     ):  
 
         num_samples = sampling_params.n
         num_generated_tokens = np.zeros((len(prompts), num_samples), dtype=int)
         predicted_answers = [["" for _ in range(num_samples)] for _ in range(len(prompts))]
-        predicted_logprobs = np.zeros((len(prompts), num_samples, top_k))
+        predicted_logprobs = []
+        generated_token_ids = []
         token_counts = np.zeros((len(prompts), num_samples), dtype=int)
         max_iterations = max_entropy_iterations
         
@@ -204,27 +215,29 @@ class VLLMClient:
 
         for ind, prompt in enumerate(prompts):
             vllm_output = self.model.generate([prompt], sampling_params)
-            generated_texts, num_generated_tokens, logprobs = self.get_vllm_output(vllm_output)
+            generated_texts, num_generated_tokens, logprobs, token_ids = self.get_vllm_output(vllm_output)
             num_generated_tokens[ind] += token_counts
             predicted_answers[ind] = generated_texts
-            predicted_logprobs[ind] = logprobs
+            generated_token_ids.append(token_ids)
+            predicted_logprobs.append(logprobs)
             for sample_ind in range(num_samples):
                 entire_chat_history = predicted_answers[ind][sample_ind].rstrip(self.THINK_END_STR) + self.WAIT_STR
                 sampling_params.n = 1
                 do_break = False
                 for iteration in range(max_entropy_iterations):
-                    entropy = self.compute_entropy(
-                        prompt, num_generated_tokens[ind][sample_ind], predicted_logprobs[ind][sample_ind]
+                    entropy = self.compute_entropy_of_answer(
+                        generated_token_ids[ind][sample_ind], predicted_logprobs[ind][sample_ind]
                     )
                         
                     if entropy < entropy_threshold or max_entropy_iterations == iteration:
                         sampling_params.stop = None
                         do_break = True                
                     vllm_output = self.model.generate(entire_chat_history, sampling_params)
-                    generated_texts, num_generated_tokens, logprobs = self.get_vllm_output(vllm_output)
+                    generated_texts, num_generated_tokens, logprobs, token_ids = self.get_vllm_output(vllm_output)
                     predicted_logprobs[ind][sample_ind] = logprobs
                     num_generated_tokens[ind][sample_ind] += token_counts[0]
                     predicted_answers[ind][sample_ind] = entire_chat_history + generated_texts[0]
+                    generated_token_ids[ind][sample_ind] = token_ids
 
                     if do_break:
                         break
@@ -272,7 +285,7 @@ class VLLMClient:
             input_text = [prompt]
             # Get first n reasoning trajectories
             outputs = self.model.generate(input_text, sampling_params=sampling_params)
-            generated_texts, token_counts, _ = self.get_vllm_output(outputs)
+            generated_texts, token_counts, _, _= self.get_vllm_output(outputs)
             num_generated_tokens[ind] += token_counts
             predicted_answers[ind] = generated_texts
             for sample_ind in range(num_samples):
@@ -287,7 +300,7 @@ class VLLMClient:
                         outputs = self.model.generate(entire_chat_history, sampling_params=sampling_params)
                         
                         # Process model outputs
-                        generated_texts, token_counts, _ = self.get_vllm_output(outputs)
+                        generated_texts, token_counts, _, _ = self.get_vllm_output(outputs)
                         num_generated_tokens[ind][sample_ind] += token_counts[0]
                         
                         # TODO: only consider the last generation
@@ -430,6 +443,7 @@ class VLLMClient:
 
         gt_answers = []
         queries = []
+        dataset = dataset[:2]
 
         for row in tqdm(dataset, desc="Dataset row", total=len(dataset)):
             queries.append(row["query"])
@@ -523,7 +537,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--budget_mode", 
         type=BudgetMode, 
-        default=BudgetMode.WAIT.value, 
+        default=BudgetMode.ENTROPY.value, 
         help="Budget mode has to be either wait or entropy",
         choices=[BudgetMode.WAIT.value, BudgetMode.ENTROPY.value]
     )
