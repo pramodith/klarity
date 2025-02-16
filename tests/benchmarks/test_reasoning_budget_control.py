@@ -35,7 +35,9 @@ class TestVLLMClient(unittest.TestCase):
     def setUp(self):
         # Mock the LLM and tokenizer
         self.mock_llm = Mock(spec=LLM)
-        self.mock_tokenizer = Mock(spec=AutoTokenizer)
+        self.mock_tokenizer = Mock()
+        self.mock_tokenizer.apply_chat_template = Mock(return_value=[1, 2, 3, 4])
+        self.mock_tokenizer.decode = Mock(return_value="<s>test</s>")
 
         # Create patches
         self.llm_patcher = patch("src.klarity.benchmarks.reasoning_budget_control.LLM", return_value=self.mock_llm)
@@ -127,6 +129,59 @@ class TestVLLMClient(unittest.TestCase):
             "Solve the following problem:" + "What is 2+2?"
         )
         self.assertEqual(result, desired_result)
+
+    def test_tokenize_prompt_basic(self):
+        """Test basic tokenize_prompt functionality"""
+        test_prompt = "What is 2+2?"
+        # Set up mock return values
+        expected_tokens = [1, 2, 3, 4]
+        expected_decoded = "<s>What is 2+2?</s>"
+        self.mock_tokenizer.apply_chat_template.return_value = expected_tokens
+        self.mock_tokenizer.decode.return_value = expected_decoded
+
+        result = self.client.tokenize_prompt(test_prompt)
+
+        # Verify the tokenizer was called correctly
+        system_prompt = self.client.add_system_prompt(test_prompt)
+        self.mock_tokenizer.apply_chat_template.assert_called_once_with(
+            [{"role": "user", "content": system_prompt}],
+            add_generation_prompt=True
+        )
+        self.mock_tokenizer.decode.assert_called_once_with(expected_tokens, skip_special_tokens=False)
+
+        # Verify the final result
+        expected_result = expected_decoded + self.client.THINK_START_STR
+        self.assertEqual(result, expected_result)
+
+    def test_tokenize_prompt_empty(self):
+        """Test tokenize_prompt with empty prompt"""
+        test_prompt = ""
+        # Set up mock return values
+        expected_tokens = [1, 2]
+        expected_decoded = "<s></s>"
+        self.mock_tokenizer.apply_chat_template.return_value = expected_tokens
+        self.mock_tokenizer.decode.return_value = expected_decoded
+
+        result = self.client.tokenize_prompt(test_prompt)
+
+        # Verify the final result
+        expected_result = expected_decoded + self.client.THINK_START_STR
+        self.assertEqual(result, expected_result)
+
+    def test_tokenize_prompt_special_characters(self):
+        """Test tokenize_prompt with special characters"""
+        test_prompt = "What is 2²?"
+        # Set up mock return values
+        expected_tokens = [1, 2, 3, 4, 5]
+        expected_decoded = "<s>What is 2²?</s>"
+        self.mock_tokenizer.apply_chat_template.return_value = expected_tokens
+        self.mock_tokenizer.decode.return_value = expected_decoded
+
+        result = self.client.tokenize_prompt(test_prompt)
+
+        # Verify the final result
+        expected_result = expected_decoded + self.client.THINK_START_STR
+        self.assertEqual(result, expected_result)
 
     def test_compute_metrics_basic(self):
         """Test compute_metrics with perfect predictions"""
