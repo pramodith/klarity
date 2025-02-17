@@ -469,7 +469,6 @@ class VLLMClient:
         else:
             raise ValueError(f"Unknown dataset type: {dataset_type}")
 
-        dataset = dataset[:2]
         gt_answers = []
         queries = []
 
@@ -562,12 +561,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--budget_mode",
         type=BudgetMode,
-        default=BudgetMode.WAIT.value,
+        default=BudgetMode.ENTROPY.value,
         help="Budget mode has to be either wait or entropy",
         choices=[BudgetMode.WAIT.value, BudgetMode.ENTROPY.value],
     )
     parser.add_argument(
-        "--entropy_threshold", type=float, default=0.15, help="Entropy threshold to use for entropy budget control"
+        "--entropy_threshold", type=float, default=0.5, help="Entropy threshold to use for entropy budget control"
     )
     parser.add_argument(
         "--max_entropy_iterations", type=int, default=1, help="Maximum number of iterations for entropy calculation"
