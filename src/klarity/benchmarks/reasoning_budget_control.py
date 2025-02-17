@@ -36,7 +36,7 @@ class VLLMClient:
     def __init__(
         self,
         model: str = "agentica-org/DeepScaleR-1.5B-Preview",
-        tensor_parallel_size: int = 4,
+        tensor_parallel_size: int = 2,
     ):
         self.model = LLM(
             model,
@@ -106,7 +106,7 @@ class VLLMClient:
             logger.error(f"Failed to parse {text[-1000:]}")
             return ""
 
-    def get_vllm_output(self, vllm_response: List):
+    def get_vllm_output(self, vllm_response: List, get_logprobs: bool = False):
         """
         Get the output of the model.
 
@@ -126,11 +126,12 @@ class VLLMClient:
                 generated_texts.append(vllm_response[prompt_ind].outputs[sample_ind].text)
                 token_ids.append(vllm_response[prompt_ind].outputs[sample_ind].token_ids)
                 num_generated_tokens.append(len(vllm_response[prompt_ind].outputs[sample_ind].token_ids))
-                lgps = []
-                for logprob in vllm_response[prompt_ind].outputs[sample_ind].logprobs:
-                    lgp = [lg.logprob for lg in logprob.values()]
-                    lgps.append(lgp)
-                logprobs.append(lgps)
+                if get_logprobs:
+                    lgps = []
+                    for logprob in vllm_response[prompt_ind].outputs[sample_ind].logprobs:
+                        lgp = [lg.logprob for lg in logprob.values()]
+                        lgps.append(lgp)
+                    logprobs.append(lgps)
 
         return generated_texts, num_generated_tokens, logprobs, token_ids
 
@@ -221,7 +222,7 @@ class VLLMClient:
 
         for ind, prompt in enumerate(prompts):
             vllm_output = self.model.generate([prompt], sampling_params)
-            generated_texts, num_tokens, logprobs, token_ids = self.get_vllm_output(vllm_output)
+            generated_texts, num_tokens, logprobs, token_ids = self.get_vllm_output(vllm_output, get_logprobs=True)
             num_generated_tokens[ind] = num_tokens
             predicted_answers[ind] = generated_texts
             generated_token_ids.append(token_ids)
@@ -235,13 +236,13 @@ class VLLMClient:
                         generated_token_ids[ind][sample_ind], predicted_logprobs[ind][sample_ind]
                     )
 
-                    if entropy < entropy_threshold or max_entropy_iterations == iteration:
+                    if entropy < entropy_threshold or max_entropy_iterations-1 == iteration:
                         sampling_params.stop = None
                         is_reasoning_complete = True
                         entire_chat_history = entire_chat_history.rstrip(self.WAIT_STR) + self.THINK_END_STR
 
                     vllm_output = self.model.generate(entire_chat_history, sampling_params)
-                    generated_texts, num_tokens, logprobs, token_ids = self.get_vllm_output(vllm_output)
+                    generated_texts, num_tokens, logprobs, token_ids = self.get_vllm_output(vllm_output, get_logprobs=True)
                     predicted_logprobs[ind][sample_ind] = logprobs
                     num_generated_tokens[ind][sample_ind] += num_tokens[0]
                     predicted_answers[ind][sample_ind] = entire_chat_history + generated_texts[0]
@@ -468,6 +469,7 @@ class VLLMClient:
         else:
             raise ValueError(f"Unknown dataset type: {dataset_type}")
 
+        dataset = dataset[:2]
         gt_answers = []
         queries = []
 
@@ -517,7 +519,7 @@ class VLLMClient:
             Tuple[float, float, float]: The accuracy for each sample index,
                 the average number of tokens and pass@1 score.
         """
-        if not total_generated_tokens or not predicted_answers or not gt_answers:
+        if  len(total_generated_tokens) == 0 or  len(predicted_answers) == 0 or len(gt_answers) == 0:
             raise ValueError("All inputs must not be None")
 
         # Shape (dataset_len, num_sample_responses)
@@ -568,7 +570,7 @@ if __name__ == "__main__":
         "--entropy_threshold", type=float, default=0.15, help="Entropy threshold to use for entropy budget control"
     )
     parser.add_argument(
-        "--max_entropy_iterations", type=int, default=2, help="Maximum number of iterations for entropy calculation"
+        "--max_entropy_iterations", type=int, default=1, help="Maximum number of iterations for entropy calculation"
     )
     args = parser.parse_args()
     if args.dataset_type == DatasetType.AIME.value:
