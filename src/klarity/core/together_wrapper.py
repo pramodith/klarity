@@ -3,6 +3,8 @@ from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 from together import Together
 
+from ..utils import TOGETHER_JSON_MODE_SUPPORTED_MODELS
+
 class TogetherModelWrapper:
     """Wrapper for Together AI models supporting both text and vision"""
 
@@ -10,6 +12,7 @@ class TogetherModelWrapper:
         self.client = Together(api_key=api_key)
         self.model_name = model_name
         self.is_vision_model = "Vision" in model_name or "vision" in model_name.lower()
+        self.supports_json_mode = model_name in TOGETHER_JSON_MODE_SUPPORTED_MODELS
 
     def generate_insight_with_image(
         self,
@@ -38,7 +41,7 @@ class TogetherModelWrapper:
             response_format={
                 "type": "json_object",
                 "schema": response_model.model_json_schema()
-            }
+            } if self.supports_json_mode else None
         )
 
         try:
@@ -59,6 +62,6 @@ class TogetherModelWrapper:
             response_format={
                 "type": "json_object",
                 "schema": response_model.model_json_schema()
-            }
+            } if self.supports_json_mode else None
         )
         return response.choices[0].message.content

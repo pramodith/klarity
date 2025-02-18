@@ -1,4 +1,5 @@
 # basic_usage_reasoning.py
+import os
 import torch
 
 from dotenv import load_dotenv
@@ -31,7 +32,12 @@ estimator = UncertaintyEstimator(
 uncertainty_processor = estimator.get_logits_processor()
 
 # Set up generation
-prompt = "Your prompt <think>\n"
+prompt = """
+    I have keys but open no locks.
+    I have space but no room.
+    You can enter, but you can’t go outside.
+    What am I? 🤔 \n
+"""
 inputs = tokenizer(prompt, return_tensors="pt").to(device)
 
 # Generate with uncertainty analysis

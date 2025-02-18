@@ -19,7 +19,7 @@ estimator = UncertaintyEstimator(
     top_k=100,
     analyzer=EntropyAnalyzer(
         min_token_prob=0.01,
-        insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        insight_model="together:meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
         insight_api_key=together_api_key,
     ),
 )
@@ -41,7 +41,7 @@ generation_output = model.generate(
 )
 
 # Analyze the generation
-result = estimator.analyze_generation(generation_output, tokenizer, uncertainty_processor)
+result = estimator.analyze_generation(generation_output, model, tokenizer, uncertainty_processor)
 
 # Get generated text
 generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)

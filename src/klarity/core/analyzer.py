@@ -4,8 +4,12 @@ import os
 import re
 import tempfile
 import traceback
+import xgrammar as xgr
+
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
+from vllm import LLM, SamplingParams
+from vllm.sampling_params import GuidedDecodingParams
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,7 +30,6 @@ from klarity.core.schemas.reasoning_analysis_schemas import (
 from klarity.core.schemas.vlm_analysis_schemas import VLMAnalysisResponseModel, EnhancedVLMAnalysisResponseModel
 
 from ..models import AttentionData, TokenInfo, UncertaintyAnalysisRequest, UncertaintyMetrics
-
 
 class EntropyAnalyzer:
     def __init__(
@@ -151,16 +154,44 @@ class EntropyAnalyzer:
         if self.together_model:
             return self.together_model.generate_insight(prompt, response_model=self.insight_response_model)
 
-        # Use original model
-        inputs = self.insight_tokenizer(prompt, return_tensors="pt").to(self.insight_model.device)
-        outputs = self.insight_model.generate(
-            inputs.input_ids,
-            max_new_tokens=400,
-            temperature=0.7,
-            top_p=0.9,
-            do_sample=True,
-        )
-        return self.insight_tokenizer.decode(outputs[0], skip_special_tokens=True).split("Analysis:")[-1].strip()
+        # If instance is vllm, use guided decoding
+        elif isinstance(self.insight_model, LLM):
+            guided_decoding_params = GuidedDecodingParams(
+                json = self.insight_response_model.model_json_schema(),
+            )
+            sampling_params = SamplingParams(
+                guided_decoding=guided_decoding_params,
+                max_tokens=400,
+                temperature=0.7,
+                top_p=0.9,
+            )
+
+            response = self.insight_model.generate(
+                prompt,
+                sampling_params=sampling_params,
+            )
+            return response[0].outputs[0].text.split("Analysis:")[-1].strip()
+
+        # Assume HuggingFace model
+        else:
+            inputs = self.insight_tokenizer(prompt, return_tensors="pt").to(self.insight_model.device)
+            
+            # Use xgrammar to enforce structured outputs
+            tokenizer_info = xgr.TokenizerInfo.from_huggingface(self.insight_tokenizer)
+            grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+            compiled_grammar = grammar_compiler.compile_json_schema(self.insight_response_model)
+            xgr_logits_processor = xgr.contrib.hf.LogitsProcessor(compiled_grammar)
+
+            outputs = self.insight_model.generate(
+                **inputs,
+                max_new_tokens=400,
+                temperature=0.7,
+                top_p=0.9,
+                do_sample=True,
+                # logits_processor=[xgr_logits_processor],
+            )
+            return self.insight_tokenizer.decode(outputs[0], skip_special_tokens=True).split("Analysis:")[-1].strip()
+
 
     def analyze(self, request: UncertaintyAnalysisRequest) -> UncertaintyMetrics:
         """Analyze uncertainty for a single generation step"""

@@ -18,7 +18,7 @@ estimator = UncertaintyEstimator(
 uncertainty_processor = estimator.get_logits_processor()
 
 # Set up generation
-prompt = "Your prompt"
+prompt = "What is the capital of France?"
 inputs = tokenizer(prompt, return_tensors="pt")
 
 # Generate with uncertainty analysis
@@ -33,7 +33,7 @@ generation_output = model.generate(
 )
 
 # Analyze the generation
-result = estimator.analyze_generation(generation_output, tokenizer, uncertainty_processor)
+result = estimator.analyze_generation(generation_output, model, tokenizer, uncertainty_processor)
 
 generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
 

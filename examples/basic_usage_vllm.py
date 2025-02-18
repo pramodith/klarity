@@ -5,6 +5,8 @@ from vllm import LLM, SamplingParams
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
 
+import os
+
 load_dotenv()
 together_api_key = os.getenv("TOGETHER_API_KEY")
 
@@ -12,14 +14,10 @@ model_name = "Qwen/Qwen2.5-0.5B-Instruct"
 llm = LLM(model=model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-
-
 estimator = UncertaintyEstimator(
     top_k=5,
     analyzer=EntropyAnalyzer(
         min_token_prob=0.01,
-        insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        insight_api_key=together_api_key,
     ),
 )
 
