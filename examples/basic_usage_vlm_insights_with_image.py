@@ -24,7 +24,7 @@ estimator = UncertaintyEstimator(
     analyzer=EnhancedVLMAnalyzer(
         min_token_prob=0.01,
         insight_model="together:meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
-        insight_api_key="c1075678755683bd111b4558782a26841bed6e94d69ae0dc9209b3b451e3f619",
+        insight_api_key="your_api_key",
         vision_config=model.config.vision_config,
         use_cls_token=True
     ),
