@@ -1,20 +1,20 @@
-from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration, LogitsProcessorList
+import json
+import os
+
+from dotenv import load_dotenv
 from PIL import Image
-import torch
+from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration, LogitsProcessorList
+
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EnhancedVLMAnalyzer
-import os
-import json
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+load_dotenv()
+together_api_key = os.getenv("TOGETHER_API_KEY")
 # Initialize VLM model
 model_id = "llava-hf/llava-onevision-qwen2-0.5b-ov-hf"
-model = LlavaOnevisionForConditionalGeneration.from_pretrained(
-    model_id,
-    output_attentions=True,
-    low_cpu_mem_usage=True
-)
+model = LlavaOnevisionForConditionalGeneration.from_pretrained(model_id, output_attentions=True, low_cpu_mem_usage=True)
 
 processor = AutoProcessor.from_pretrained(model_id)
 
@@ -24,9 +24,9 @@ estimator = UncertaintyEstimator(
     analyzer=EnhancedVLMAnalyzer(
         min_token_prob=0.01,
         insight_model="together:meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
-        insight_api_key="your_api_key",
+        insight_api_key=together_api_key,
         vision_config=model.config.vision_config,
-        use_cls_token=True
+        use_cls_token=True,
     ),
 )
 
@@ -38,23 +38,11 @@ question = "How many engines does the plane have?"
 image = Image.open(image_path)
 
 # Prepare input with image and text
-conversation = [
-    {
-        "role": "user",
-        "content": [
-            {"type": "text", "text": question},
-            {"type": "image"}
-        ]
-    }
-]
+conversation = [{"role": "user", "content": [{"type": "text", "text": question}, {"type": "image"}]}]
 prompt = processor.apply_chat_template(conversation, add_generation_prompt=True)
 
 # Process inputs
-inputs = processor(
-    images=image,
-    text=prompt,
-    return_tensors='pt'
-)
+inputs = processor(images=image, text=prompt, return_tensors="pt")
 
 try:
     # Generate with uncertainty and attention analysis
@@ -68,7 +56,7 @@ try:
         return_dict_in_generate=True,
         output_scores=True,
         output_attentions=True,
-        use_cache=True
+        use_cache=True,
     )
 
     # Analyze the generation - now includes both images and enhanced analysis
@@ -78,7 +66,7 @@ try:
         tokenizer=processor,
         processor=uncertainty_processor,
         prompt=question,
-        image=image  # Image is required for enhanced analysis
+        image=image,  # Image is required for enhanced analysis
     )
 
     # Get generated text
@@ -106,4 +94,5 @@ try:
 except Exception as e:
     print(f"Error during generation: {str(e)}")
     import traceback
+
     traceback.print_exc()

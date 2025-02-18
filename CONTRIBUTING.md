@@ -48,7 +48,7 @@ can run `pip install -e ".[dev]"`
 7. Lint and clean your code using 
 ```
 uv tool install ruff (one time only)
-uvx ruff check 
+uvx ruff check --select I --fix
 uvx ruff clean
 uvx ruff format
 ```

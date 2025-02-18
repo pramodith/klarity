@@ -1,22 +1,34 @@
 # core/analyzer.py
+import json
 import os
+import re
 import tempfile
-from typing import Any, List, Dict, Optional
-from klarity.core.together_wrapper import TogetherModelWrapper
+import traceback
+from collections import defaultdict
+from typing import Any, Dict, List, Optional
+
+import matplotlib.pyplot as plt
 import numpy as np
+import torch
+import xgrammar as xgr
+from PIL import Image
+from pydantic import BaseModel
 from scipy.stats import entropy
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from collections import defaultdict
-from ..models import TokenInfo, UncertaintyAnalysisRequest, UncertaintyMetrics, AttentionData
-import json
-import re
-import traceback
-import matplotlib.pyplot as plt
-import torch
-from PIL import Image
-import base64
-import io
+from vllm import LLM, SamplingParams
+from vllm.sampling_params import GuidedDecodingParams
+
+from klarity.core.schemas.insight_schemas import InsightAnalysisResponseModel
+from klarity.core.schemas.reasoning_analysis_schemas import (
+    ReasoningStepAnalysisResponseModel,
+    ReasoningStepIdentificationResponseModel,
+)
+from klarity.core.schemas.vlm_analysis_schemas import EnhancedVLMAnalysisResponseModel, VLMAnalysisResponseModel
+from klarity.core.system_prompts import *
+from klarity.core.together_wrapper import TogetherModelWrapper
+
+from ..models import AttentionData, TokenInfo, UncertaintyAnalysisRequest, UncertaintyMetrics
 
 
 class EntropyAnalyzer:
@@ -27,6 +39,7 @@ class EntropyAnalyzer:
         insight_tokenizer: Optional[Any] = None,
         insight_api_key: Optional[str] = None,
         insight_prompt_template: Optional[str] = None,
+        insight_response_model: BaseModel = InsightAnalysisResponseModel,
     ):
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         self.min_token_prob = min_token_prob
@@ -43,49 +56,8 @@ class EntropyAnalyzer:
             self.insight_model = insight_model
             self.insight_tokenizer = insight_tokenizer
 
-        self.insight_prompt_template = (
-            insight_prompt_template
-            or """Analyze the uncertainty in this generation:
-
-INPUT QUERY: {input_query}
-GENERATED TEXT: {generated_text}
-
-UNCERTAINTY METRICS:
-{detailed_metrics}
-
-Return a concise JSON analysis with uncertainty scores (0-100):
-{{
-    "scores": {{
-        "overall_uncertainty": "<0-1>",
-        "confidence_score": "<0-1>",
-        "hallucination_risk": "<0-1>"
-    }},
-    "uncertainty_analysis": {{
-        "high_uncertainty_parts": [
-            {{
-                "text": "<specific_text>",
-                "why": "<brief_reason_for_uncertainty>"
-            }}
-        ],
-        "main_issues": [
-            {{
-                "issue": "<specific_problem>",
-                "evidence": "<brief_evidence>"
-            }}
-        ],
-        "key_suggestions": [
-            {{
-                "what": "<specific_improvement>",
-                "how": "<brief_implementation>"
-            }}
-        ]
-    }}
-}}
-
-Be concise. Focus on specific content, not abstract metrics.
-
-Analysis:"""
-        )
+        self.insight_prompt_template = insight_prompt_template or INSIGHT_PROMPT_TEMPLATE
+        self.insight_response_model = insight_response_model
 
     def _calculate_raw_entropy(self, probabilities: np.ndarray) -> float:
         """Calculate raw entropy of probability distribution"""
@@ -180,18 +152,45 @@ Analysis:"""
         )
 
         if self.together_model:
-            return self.together_model.generate_insight(prompt)
+            return self.together_model.generate_insight(prompt, response_model=self.insight_response_model)
 
-        # Use original model
-        inputs = self.insight_tokenizer(prompt, return_tensors="pt").to(self.insight_model.device)
-        outputs = self.insight_model.generate(
-            inputs.input_ids,
-            max_new_tokens=400,
-            temperature=0.7,
-            top_p=0.9,
-            do_sample=True,
-        )
-        return self.insight_tokenizer.decode(outputs[0], skip_special_tokens=True).split("Analysis:")[-1].strip()
+        # If instance is vllm, use guided decoding
+        elif isinstance(self.insight_model, LLM):
+            guided_decoding_params = GuidedDecodingParams(
+                json=self.insight_response_model.model_json_schema(),
+            )
+            sampling_params = SamplingParams(
+                guided_decoding=guided_decoding_params,
+                max_tokens=400,
+                temperature=0.7,
+                top_p=0.9,
+            )
+
+            response = self.insight_model.generate(
+                prompt,
+                sampling_params=sampling_params,
+            )
+            return response[0].outputs[0].text
+
+        # Assume HuggingFace model
+        else:
+            inputs = self.insight_tokenizer(prompt, return_tensors="pt").to(self.insight_model.device)
+
+            # Use xgrammar to enforce structured outputs
+            tokenizer_info = xgr.TokenizerInfo.from_huggingface(self.insight_tokenizer)
+            grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
+            compiled_grammar = grammar_compiler.compile_json_schema(self.insight_response_model)
+            xgr_logits_processor = xgr.contrib.hf.LogitsProcessor(compiled_grammar)
+
+            outputs = self.insight_model.generate(
+                **inputs,
+                max_new_tokens=400,
+                temperature=0.7,
+                top_p=0.9,
+                do_sample=True,
+                logits_processor=[xgr_logits_processor],
+            )
+            return self.insight_tokenizer.decode(outputs[0], skip_special_tokens=True)
 
     def analyze(self, request: UncertaintyAnalysisRequest) -> UncertaintyMetrics:
         """Analyze uncertainty for a single generation step"""
@@ -213,6 +212,8 @@ class ReasoningAnalyzer(EntropyAnalyzer):
         self,
         reasoning_start_token: str = "<think>",
         reasoning_end_token: str = "</think>",
+        reasoning_identification_response_model: BaseModel = ReasoningStepIdentificationResponseModel,
+        reasoning_step_analysis_response_model: BaseModel = ReasoningStepAnalysisResponseModel,
         *args,
         **kwargs,
     ):
@@ -221,54 +222,11 @@ class ReasoningAnalyzer(EntropyAnalyzer):
         self.reasoning_end_token = reasoning_end_token
 
         # Template to identify reasoning steps
-        self.reasoning_identification_template = """Find content between {start_token} and {end_token} markers in this text and return only a JSON response:
+        self.reasoning_identification_template = REASONING_STEP_IDENTIFICATION_PROMPT_TEMPLATE
 
-{text}
-Identify and split key reasoning steps in the thought process.
-
-Return ONLY the EXACT text found between the markers as JSON:
-{{
-    "reasoning_steps": [
-        {{
-            "step_number": (step_number),
-            "content": (exact text found between markers),
-            "position": [start_index_in_text, end_index_in_text],
-            "step_type": (type of reasoning step: premise/analysis/conclusion)
-        }}
-    ]
-}}"""
-
-        self.step_analysis_template = """Analyze this step:
-{reasoning_content}
-Query: {input_query}
-Step {step_number} of {total_steps}
-Metrics: {detailed_metrics}
-
-Return ONLY this exact JSON structure:
-{{
-    "training_insights": {{
-        "step_quality": {{
-            "coherence": "0.8",
-            "relevance": "0.9",
-            "confidence": "0.7"
-        }},
-        "improvement_targets": [
-            {{
-                "aspect": "conciseness",
-                "importance": "0.8",
-                "current_issue": "verbose response",
-                "training_suggestion": "reduce explanation steps"
-            }}
-        ],
-        "tokens_of_interest": [
-            {{
-                "token": "test",
-                "why_flagged": "reason",
-                "entropy": "0.5"
-            }}
-        ]
-    }}
-}}"""
+        self.step_analysis_template = REASONING_STEP_ANALYSIS_PROMPT_TEMPLATE
+        self.reasoning_step_analysis_response_model = reasoning_step_analysis_response_model
+        self.reasoning_step_identification_response_model = reasoning_step_identification_response_model
 
     def identify_reasoning_steps(self, text: str) -> List[Dict]:
         """Use the insight model to identify reasoning steps"""
@@ -280,7 +238,9 @@ Return ONLY this exact JSON structure:
             )
 
             if self.together_model:
-                response = self.together_model.generate_insight(prompt)
+                response = self.together_model.generate_insight(
+                    prompt, self.reasoning_step_identification_response_model
+                )
                 print("\nDEBUG - Raw response:")
                 print(response)
 
@@ -324,7 +284,7 @@ Return ONLY this exact JSON structure:
             )
 
             if self.together_model:
-                response = self.together_model.generate_insight(prompt)
+                response = self.together_model.generate_insight(prompt, self.reasoning_step_analysis_response_model)
                 print(f"\nDEBUG - Raw response from analysis: {response}")
 
                 # Find JSON content
@@ -442,6 +402,7 @@ class VLMAnalyzer(EntropyAnalyzer):
         insight_tokenizer: Optional[Any] = None,
         insight_api_key: Optional[str] = None,
         insight_prompt_template: Optional[str] = None,
+        insight_response_model: Optional[BaseModel] = VLMAnalysisResponseModel,
     ):
         # First call parent's __init__ with only the arguments it expects
         super().__init__(
@@ -450,6 +411,7 @@ class VLMAnalyzer(EntropyAnalyzer):
             insight_tokenizer=insight_tokenizer,
             insight_api_key=insight_api_key,
             insight_prompt_template=insight_prompt_template,
+            insight_response_model=insight_response_model,
         )
 
         # Then handle VLMAnalyzer-specific initialization
@@ -458,54 +420,7 @@ class VLMAnalyzer(EntropyAnalyzer):
         self.use_cls_token = use_cls_token
 
         # Template that uses {{ }} for literal curly braces in the JSON structure
-        self.vlm_analysis_template = """Analyze the vision-language model output:
-
-QUERY: {input_query}
-GENERATED TEXT: {generated_text}
-
-TOKEN UNCERTAINTY METRICS:
-{detailed_metrics}
-
-ATTENTION PATTERNS:
-{attention_patterns}
-
-Return ONLY this exact JSON structure:
-{{
-    "scores": {{
-        "overall_uncertainty": "<0-1>",
-        "visual_grounding": "<0-1>",
-        "confidence": "<0-1>"
-    }},
-    "visual_analysis": {{
-        "attention_quality": {{
-            "score": "<0-1>",
-            "key_regions": ["<region1>", "<region2>"],
-            "missed_regions": ["<region1>", "<region2>"]
-        }},
-        "token_attention_alignment": [
-            {{
-                "token": "<token>",
-                "attended_region": "<region>",
-                "relevance": "<0-1>"
-            }}
-        ]
-    }},
-    "uncertainty_analysis": {{
-        "high_uncertainty_segments": [
-            {{
-                "text": "<text>",
-                "cause": "<reason>",
-                "visual_context": "<what_model_looked_at>"
-            }}
-        ],
-        "improvement_suggestions": [
-            {{
-                "aspect": "<what>",
-                "suggestion": "<how>"
-            }}
-        ]
-    }}
-}}"""
+        self.vlm_analysis_template = VLM_ANALYSIS_PROMPT_TEMPLATE
 
     def set_vision_config(self, vision_config):
         """Set or update vision configuration"""
@@ -684,9 +599,7 @@ Return ONLY this exact JSON structure:
             generated_text=generated_text,
         )
 
-        return self.together_model.generate_insight(prompt)
-
-
+        return self.together_model.generate_insight(prompt, self.insight_response_model)
 
 
 # analyze images with VLM
@@ -700,6 +613,7 @@ class EnhancedVLMAnalyzer(VLMAnalyzer):
         insight_tokenizer: Optional[Any] = None,
         insight_api_key: Optional[str] = None,
         insight_prompt_template: Optional[str] = None,
+        visual_insight_response_model: BaseModel = EnhancedVLMAnalysisResponseModel,
     ):
         super().__init__(
             vision_config=vision_config,
@@ -708,77 +622,25 @@ class EnhancedVLMAnalyzer(VLMAnalyzer):
             insight_model=insight_model,
             insight_tokenizer=insight_tokenizer,
             insight_api_key=insight_api_key,
-            insight_prompt_template=insight_prompt_template
+            insight_prompt_template=insight_prompt_template,
         )
-        
+
         # Initialize TogetherModelWrapper if insight_model is provided
         if isinstance(insight_model, str) and insight_api_key:
             if insight_model.startswith("together:"):
                 model_name = insight_model.replace("together:", "")
-                self.together_model = TogetherModelWrapper(
-                    model_name=model_name,
-                    api_key=insight_api_key
-                )
+                self.together_model = TogetherModelWrapper(model_name=model_name, api_key=insight_api_key)
         else:
             self.together_model = None
 
-        self.visual_analysis_template = """Evaluate the AI's image understanding using the provided data:
-
-What was asked: {input_query}
-What the AI answered: {generated_text}
-
-Uncertainty Details:
-{detailed_metrics}
-
-Where the AI looked (attention):
-{attention_patterns}
-• Warm colors = More focus areas
-
-Return only a JSON with this structure:
-{{
-    "scores": {{
-        "overall_uncertainty": "<0-1>",
-        "visual_grounding": "<0-1>",  // Image-text match quality
-        "confidence": "<0-1>"         // Answer certainty
-    }},
-    "visual_analysis": {{
-        "attention_quality": {{       // How well focus matched the task
-            "score": "<0-1>",
-            "key_regions": ["<main area 1>", "<main area 2>"],
-            "missed_regions": ["<ignored area 1>", "<ignored area 2>"]
-        }},
-        "token_attention_alignment": [  // Word vs focus match
-            {{
-                "word": "<token>",
-                "focused_spot": "<region>",
-                "relevance": "<0-1>",   // How related to answer
-                "uncertainty": "<0-1>"  // Word-level doubt
-            }}
-        ]
-    }},
-    "uncertainty_analysis": {{
-        "problem_spots": [  // High-doubt sections
-            {{
-                "text": "<text part>",
-                "reason": "<why uncertain>",
-                "looked_at": "<image area>",
-                "connection": "<focus vs doubt link>"
-            }}
-        ],
-        "improvement_tips": [  // How to do better
-            {{
-                "area": "<what to fix>",
-                "tip": "<how to fix>"
-            }}
-        ]
-    }}
-}}"""
+        self.visual_analysis_template = ENHANCED_VLM_ANALYSIS_PROMPT_TEMPLATE
+        self.visual_insight_response_model = visual_insight_response_model
 
     def _encode_image_to_base64(self, image: Image.Image) -> str:
         """Convert PIL Image to base64 string"""
-        import io
         import base64
-        
+        import io
+
         buffered = io.BytesIO()
         image.save(buffered, format="PNG")
         return base64.b64encode(buffered.getvalue()).decode()
@@ -789,10 +651,10 @@ Return only a JSON with this structure:
         attention_data: AttentionData,
     ) -> Image.Image:
         """Create visualization of attention overlay and return as PIL Image"""
-        import tempfile
         import os
-        
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
             # Uses the parent class's visualize_attention method to create the overlay
             self.visualize_attention(attention_data, image, tmp_file.name)
             viz_image = Image.open(tmp_file.name)
@@ -836,13 +698,13 @@ Return only a JSON with this structure:
             # Create and encode attention visualization
             viz_image = self._create_attention_visualization(image, attention_data)
             attention_base64 = self._encode_image_to_base64(viz_image)
-            
+
             # Prepare the prompt
             prompt = self.visual_analysis_template.format(
                 input_query=input_query,
                 generated_text=generated_text,
                 detailed_metrics="\n".join(detailed_metrics),
-                attention_patterns="\n".join(attention_patterns)
+                attention_patterns="\n".join(attention_patterns),
             )
 
             # Use the wrapper to generate insight with the attention visualization
@@ -850,9 +712,10 @@ Return only a JSON with this structure:
                 prompt=prompt,
                 image_data=[attention_base64],
                 temperature=0.7,
-                max_tokens=800
+                max_tokens=800,
+                response_model=self.visual_insight_response_model,
             )
-            
+
         except Exception as e:
             print(f"Error in visual insight generation: {str(e)}")
             traceback.print_exc()
@@ -865,7 +728,7 @@ Return only a JSON with this structure:
         generated_text: Optional[str] = "",
         attention_data: Optional[AttentionData] = None,
         image: Optional[Image.Image] = None,
-        use_visual_analysis: bool = True
+        use_visual_analysis: bool = True,
     ) -> Optional[Dict]:
         """Generate comprehensive analysis including visual analysis by default"""
         # Get base analysis
@@ -873,9 +736,9 @@ Return only a JSON with this structure:
             metrics_list=metrics_list,
             input_query=input_query,
             generated_text=generated_text,
-            attention_data=attention_data
+            attention_data=attention_data,
         )
-        
+
         # Convert string insight to dict if necessary
         final_insight = {}
         if isinstance(base_insight, str):
@@ -889,7 +752,7 @@ Return only a JSON with this structure:
             final_insight = base_insight
         elif base_insight is None:
             final_insight = {}
-        
+
         # Add enhanced visual analysis if possible
         if use_visual_analysis and self.together_model and image and attention_data:
             visual_analysis = self.generate_visual_insight(
@@ -897,10 +760,10 @@ Return only a JSON with this structure:
                 image=image,
                 attention_data=attention_data,
                 input_query=input_query,
-                generated_text=generated_text
+                generated_text=generated_text,
             )
-            
+
             if visual_analysis:
                 final_insight["enhanced_visual_analysis"] = visual_analysis
-        
+
         return final_insight

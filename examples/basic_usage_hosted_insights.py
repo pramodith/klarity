@@ -1,8 +1,15 @@
 # basic_usage_hosted_insights.py
+import json
+import os
+
+from dotenv import load_dotenv
 from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorList
+
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
 
+load_dotenv()
+together_api_key = os.getenv("TOGETHER_API_KEY")
 # Initialize your model
 model_name = "Qwen/Qwen2.5-0.5B-Instruct"
 model = AutoModelForCausalLM.from_pretrained(model_name)
@@ -13,14 +20,14 @@ estimator = UncertaintyEstimator(
     top_k=100,
     analyzer=EntropyAnalyzer(
         min_token_prob=0.01,
-        insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        insight_api_key="your_api_key",
+        insight_model="together:meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+        insight_api_key=together_api_key,
     ),
 )
 uncertainty_processor = estimator.get_logits_processor()
 
 # Set up generation
-prompt = "Your prompt"
+prompt = "What are the capitals of France and Spain?"
 inputs = tokenizer(prompt, return_tensors="pt")
 
 # Generate with uncertainty analysis
@@ -35,7 +42,7 @@ generation_output = model.generate(
 )
 
 # Analyze the generation
-result = estimator.analyze_generation(generation_output, tokenizer, uncertainty_processor)
+result = estimator.analyze_generation(generation_output, model, tokenizer, uncertainty_processor)
 
 # Get generated text
 generated_text = tokenizer.decode(generation_output.sequences[0], skip_special_tokens=True)
@@ -53,4 +60,5 @@ for idx, metrics in enumerate(result.token_metrics):
 
 # Show comprehensive insight
 print("\nComprehensive Analysis:")
-print(result.overall_insight)
+response = json.loads(result.overall_insight)
+print(json.dumps(response, indent=2))

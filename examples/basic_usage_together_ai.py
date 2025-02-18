@@ -1,16 +1,22 @@
 # basic_usage_together_ai.py
+import os
+
+from dotenv import load_dotenv
+
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
 
+load_dotenv()
+together_api_key = os.getenv("TOGETHER_API_KEY")
 # Initialize for Together AI model
 estimator = UncertaintyEstimator(
     top_k=5,
     analyzer=EntropyAnalyzer(
         min_token_prob=0.01,
         insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        insight_api_key="your_api_key",
+        insight_api_key=together_api_key,
     ),
-    together_api_key="your_api_key",
+    together_api_key=together_api_key,
     together_model="meta-llama/Llama-3.3-70B-Instruct-Turbo",
 )
 

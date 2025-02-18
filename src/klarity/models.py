@@ -1,6 +1,7 @@
 # models.py
+from typing import Any, Dict, List, Optional, Union
+
 from pydantic import BaseModel, ConfigDict
-from typing import Optional, Dict, List, Union, Any
 
 
 class TokenInfo(BaseModel):
