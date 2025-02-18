@@ -1,12 +1,14 @@
 # estimator.py
-from typing import Optional, Dict, Any, List
-import torch
-import numpy as np
-from together import Together
-from transformers import PreTrainedTokenizer, LogitsProcessor
-from .models import TokenInfo, UncertaintyMetrics, UncertaintyAnalysisResult
-from .core.analyzer import EntropyAnalyzer, VLMAnalyzer, EnhancedVLMAnalyzer
 import math
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+import torch
+from together import Together
+from transformers import LogitsProcessor, PreTrainedTokenizer
+
+from .core.analyzer import EnhancedVLMAnalyzer, EntropyAnalyzer, VLMAnalyzer
+from .models import TokenInfo, UncertaintyAnalysisResult, UncertaintyMetrics
 
 
 class UncertaintyLogitsProcessor(LogitsProcessor):
@@ -107,7 +109,7 @@ class UncertaintyEstimator:
         if is_vlm:
             if not hasattr(self.analyzer, "patch_size") or self.analyzer.patch_size is None:
                 self.analyzer.set_vision_config(model.config.vision_config)
-            
+
             # Process VLM-specific outputs
             input_length = processor.input_ids.shape[1] if hasattr(processor, "input_ids") else 0
             generated_tokens = generation_output.sequences[0][input_length:]
@@ -127,11 +129,9 @@ class UncertaintyEstimator:
             if hasattr(generation_output, "scores"):
                 for step, logits in enumerate(generation_output.scores):
                     token_info = self._process_logits(logits, tokenizer)
-                    
+
                     metrics = UncertaintyMetrics(
-                        raw_entropy=self.analyzer._calculate_raw_entropy(
-                            np.array([t.probability for t in token_info])
-                        ),
+                        raw_entropy=self.analyzer._calculate_raw_entropy(np.array([t.probability for t in token_info])),
                         semantic_entropy=self.analyzer._calculate_semantic_entropy(token_info),
                         token_predictions=token_info,
                     )
@@ -146,7 +146,7 @@ class UncertaintyEstimator:
                     generated_text=generated_text,
                     attention_data=attention_data,
                     image=image,
-                    use_visual_analysis=True
+                    use_visual_analysis=True,
                 )
             else:
                 # For regular VLMAnalyzer
@@ -154,13 +154,11 @@ class UncertaintyEstimator:
                     metrics_list=all_metrics,
                     input_query=input_query,
                     generated_text=generated_text,
-                    attention_data=attention_data
+                    attention_data=attention_data,
                 )
 
             return UncertaintyAnalysisResult(
-                token_metrics=all_metrics,
-                overall_insight=overall_insight,
-                attention_data=attention_data
+                token_metrics=all_metrics, overall_insight=overall_insight, attention_data=attention_data
             )
 
         else:
@@ -173,29 +171,30 @@ class UncertaintyEstimator:
                 if logprobs_data:
                     for token_data in logprobs_data:
                         logprobs_items = [
-                            (token, logprob.logprob, logprob.decoded_token) 
-                            for token, logprob in token_data.items()
+                            (token, logprob.logprob, logprob.decoded_token) for token, logprob in token_data.items()
                         ]
                         logprobs_items.sort(key=lambda x: x[1], reverse=True)
-                        
+
                         token_info = [
                             TokenInfo(
                                 token=decoded_token,
                                 token_id=int(token_id),
                                 logit=logprob,
-                                probability=math.exp(logprob)
+                                probability=math.exp(logprob),
                             )
-                            for token_id, logprob, decoded_token in logprobs_items[:self.top_k]
+                            for token_id, logprob, decoded_token in logprobs_items[: self.top_k]
                         ]
-                        
+
                         if token_info:
                             metrics = UncertaintyMetrics(
                                 raw_entropy=self.analyzer._calculate_raw_entropy(
                                     np.array([t.probability for t in token_info])
-                                ) if self.analyzer else 0.0,
-                                semantic_entropy=self.analyzer._calculate_semantic_entropy(
-                                    token_info
-                                ) if self.analyzer else 0.0,
+                                )
+                                if self.analyzer
+                                else 0.0,
+                                semantic_entropy=self.analyzer._calculate_semantic_entropy(token_info)
+                                if self.analyzer
+                                else 0.0,
                                 token_predictions=token_info,
                             )
                             all_metrics.append(metrics)
@@ -229,9 +228,7 @@ class UncertaintyEstimator:
                 for step, logits in enumerate(processor.captured_logits):
                     token_info = self._process_logits(logits, tokenizer)
                     metrics = UncertaintyMetrics(
-                        raw_entropy=self.analyzer._calculate_raw_entropy(
-                            np.array([t.probability for t in token_info])
-                        ),
+                        raw_entropy=self.analyzer._calculate_raw_entropy(np.array([t.probability for t in token_info])),
                         semantic_entropy=self.analyzer._calculate_semantic_entropy(token_info),
                         token_predictions=token_info,
                     )
@@ -239,13 +236,11 @@ class UncertaintyEstimator:
 
             # Generate insight for non-VLM case
             overall_insight = self.analyzer.generate_overall_insight(
-                all_metrics,
-                input_query=input_query,
-                generated_text=generated_text
+                all_metrics, input_query=input_query, generated_text=generated_text
             )
 
         return UncertaintyAnalysisResult(
             token_metrics=all_metrics,
             overall_insight=overall_insight,
-            attention_data=attention_data if is_vlm else None
+            attention_data=attention_data if is_vlm else None,
         )

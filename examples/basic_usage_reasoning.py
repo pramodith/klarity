@@ -1,9 +1,14 @@
 # basic_usage_reasoning.py
-from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorList
-from klarity import UncertaintyEstimator
-from klarity.core.analyzer import ReasoningAnalyzer
 import torch
 
+from dotenv import load_dotenv
+from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorList
+
+from klarity import UncertaintyEstimator
+from klarity.core.analyzer import ReasoningAnalyzer
+
+load_dotenv()
+together_api_key = os.getenv("TOGETHER_API_KEY")
 # Initialize model with GPU support
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -18,7 +23,7 @@ estimator = UncertaintyEstimator(
     analyzer=ReasoningAnalyzer(
         min_token_prob=0.01,
         insight_model="together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        insight_api_key="your_api_key",
+        insight_api_key=together_api_key,
         reasoning_start_token="<think>",
         reasoning_end_token="</think>",
     ),

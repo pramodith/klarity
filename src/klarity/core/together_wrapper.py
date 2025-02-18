@@ -1,10 +1,7 @@
 # core/together_wrapper.py
-from typing import Optional, Dict, Any, List
+from pydantic import BaseModel
+from typing import Any, Dict, List, Optional
 from together import Together
-import io
-import base64
-from PIL import Image
-
 
 class TogetherModelWrapper:
     """Wrapper for Together AI models supporting both text and vision"""
@@ -17,6 +14,7 @@ class TogetherModelWrapper:
     def generate_insight_with_image(
         self,
         prompt: str,
+        response_model: BaseModel,
         image_data: List[str],  # List of base64 encoded images
         temperature: float = 0.7,
         max_tokens: int = 800,
@@ -28,38 +26,39 @@ class TogetherModelWrapper:
         # Create messages with text and images
         content = [{"type": "text", "text": prompt}]
         for img in image_data:
-            content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/png;base64,{img}"
-                }
-            })
+            content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img}"}})
 
         messages = [{"role": "user", "content": content}]
 
         response = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=False
+            model=self.model_name, 
+            messages=messages, 
+            temperature=temperature, 
+            max_tokens=max_tokens, stream=False, 
+            response_format={
+                "type": "json_object",
+                "schema": response_model.model_json_schema()
+            }
         )
 
         try:
             # Try to parse as JSON first
-            import json
             result = json.loads(response.choices[0].message.content)
             return result
         except json.JSONDecodeError:
             # Return raw text if not valid JSON
             return {"text": response.choices[0].message.content}
 
-    def generate_insight(self, prompt: str) -> str:
+    def generate_insight(self, prompt: str, response_model: BaseModel) -> str:
         """Generate text-only insight"""
         response = self.client.chat.completions.create(
             model=self.model_name,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=800,
+            response_format={
+                "type": "json_object",
+                "schema": response_model.model_json_schema()
+            }
         )
         return response.choices[0].message.content

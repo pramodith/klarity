@@ -1,18 +1,19 @@
-from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration, LogitsProcessorList
-from PIL import Image
-from klarity import UncertaintyEstimator
-from klarity.core.analyzer import VLMAnalyzer
 import os
 
+from dotenv import load_dotenv
+from PIL import Image
+from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration, LogitsProcessorList
+
+from klarity import UncertaintyEstimator
+from klarity.core.analyzer import VLMAnalyzer
+
+load_dotenv()
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+together_api_key = os.getenv("TOGETHER_API_KEY")
 # Initialize VLM model
 model_id = "llava-hf/llava-onevision-qwen2-0.5b-ov-hf"
-model = LlavaOnevisionForConditionalGeneration.from_pretrained(
-    model_id,
-    output_attentions=True,
-    low_cpu_mem_usage=True
-)
+model = LlavaOnevisionForConditionalGeneration.from_pretrained(model_id, output_attentions=True, low_cpu_mem_usage=True)
 
 processor = AutoProcessor.from_pretrained(model_id)
 
@@ -22,7 +23,7 @@ estimator = UncertaintyEstimator(
     analyzer=VLMAnalyzer(
         min_token_prob=0.01,
         insight_model="together:meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
-        insight_api_key="c1075678755683bd111b4558782a26841bed6e94d69ae0dc9209b3b451e3f619",
+        insight_api_key=together_api_key,
         vision_config=model.config.vision_config,
         use_cls_token=True,
     ),
@@ -61,7 +62,7 @@ try:
         tokenizer=processor,
         processor=uncertainty_processor,
         prompt=question,
-        image=image  # Still needed for basic attention visualization
+        image=image,  # Still needed for basic attention visualization
     )
 
     # Output handling remains mostly the same
@@ -86,9 +87,7 @@ try:
     if result.attention_data:
         print("\nAttention Analysis:")
         estimator.analyzer.visualize_attention(
-            result.attention_data,
-            image,
-            save_path="examples/attention_maps/attention_visualization.png"
+            result.attention_data, image, save_path="examples/attention_maps/attention_visualization.png"
         )
 
     # Show basic insight
@@ -98,4 +97,5 @@ try:
 except Exception as e:
     print(f"Error during generation: {str(e)}")
     import traceback
+
     traceback.print_exc()
