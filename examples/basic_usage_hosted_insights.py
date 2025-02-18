@@ -1,4 +1,5 @@
 # basic_usage_hosted_insights.py
+import json
 import os
 
 from dotenv import load_dotenv
@@ -59,4 +60,5 @@ for idx, metrics in enumerate(result.token_metrics):
 
 # Show comprehensive insight
 print("\nComprehensive Analysis:")
-print(result.overall_insight)
+response = json.loads(result.overall_insight)
+print(json.dumps(response, indent=2))

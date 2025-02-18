@@ -4,8 +4,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorLis
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
 
+import json
+
 # Initialize your model
-model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+model_name = "HuggingFaceTB/SmolLM2-135M-Instruct"
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -52,4 +54,5 @@ for idx, metrics in enumerate(result.token_metrics):
 
 # Show comprehensive insight
 print("\nComprehensive Analysis:")
-print(result.overall_insight)
+response = json.loads(result.overall_insight)
+print(json.dumps(response, indent=2))

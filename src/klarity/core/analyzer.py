@@ -170,8 +170,8 @@ class EntropyAnalyzer:
                 prompt,
                 sampling_params=sampling_params,
             )
-            return response[0].outputs[0].text.split("Analysis:")[-1].strip()
-
+            return response[0].outputs[0].text
+        
         # Assume HuggingFace model
         else:
             inputs = self.insight_tokenizer(prompt, return_tensors="pt").to(self.insight_model.device)
@@ -188,10 +188,9 @@ class EntropyAnalyzer:
                 temperature=0.7,
                 top_p=0.9,
                 do_sample=True,
-                # logits_processor=[xgr_logits_processor],
+                logits_processor=[xgr_logits_processor],
             )
-            return self.insight_tokenizer.decode(outputs[0], skip_special_tokens=True).split("Analysis:")[-1].strip()
-
+            return self.insight_tokenizer.decode(outputs[0], skip_special_tokens=True)
 
     def analyze(self, request: UncertaintyAnalysisRequest) -> UncertaintyMetrics:
         """Analyze uncertainty for a single generation step"""
@@ -406,7 +405,7 @@ class VLMAnalyzer(EntropyAnalyzer):
         insight_tokenizer: Optional[Any] = None,
         insight_api_key: Optional[str] = None,
         insight_prompt_template: Optional[str] = None,
-        response_model: BaseModel = VLMAnalysisResponseModel,
+        insight_response_model: Optional[BaseModel] = VLMAnalysisResponseModel,
     ):
         # First call parent's __init__ with only the arguments it expects
         super().__init__(
@@ -415,7 +414,7 @@ class VLMAnalyzer(EntropyAnalyzer):
             insight_tokenizer=insight_tokenizer,
             insight_api_key=insight_api_key,
             insight_prompt_template=insight_prompt_template,
-            response_model=response_model,
+            insight_response_model=insight_response_model,
         )
 
         # Then handle VLMAnalyzer-specific initialization
@@ -603,7 +602,7 @@ class VLMAnalyzer(EntropyAnalyzer):
             generated_text=generated_text,
         )
 
-        return self.together_model.generate_insight(prompt, self.response_model)
+        return self.together_model.generate_insight(prompt, self.insight_response_model)
 
 
 # analyze images with VLM

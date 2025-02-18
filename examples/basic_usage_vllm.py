@@ -5,6 +5,7 @@ from vllm import LLM, SamplingParams
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
 
+import json
 import os
 
 load_dotenv()
@@ -17,6 +18,8 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 estimator = UncertaintyEstimator(
     top_k=5,
     analyzer=EntropyAnalyzer(
+        insight_model = llm,
+        insight_tokenizer = tokenizer,
         min_token_prob=0.01,
     ),
 )
@@ -45,4 +48,5 @@ for idx, metrics in enumerate(result.token_metrics):
 
 if result.overall_insight:
     print("\nAnalysis:")
-    print(result.overall_insight)
+    response = json.loads(result.overall_insight)
+    print(json.dumps(response, indent=2))
