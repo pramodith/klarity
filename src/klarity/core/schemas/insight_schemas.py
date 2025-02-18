@@ -5,9 +5,12 @@ from pydantic import BaseModel, Field
 
 class Scores(BaseModel):
     overall_uncertainty: float = Field(
-        ..., description="Overall uncertainty score indicating the model's general uncertainty level in the range [0, 1]"
+        ...,
+        description="Overall uncertainty score indicating the model's general uncertainty level in the range [0, 1]",
     )
-    confidence_score: float = Field(..., description="Model's confidence in its analysis and predictions in the range [0, 1]")
+    confidence_score: float = Field(
+        ..., description="Model's confidence in its analysis and predictions in the range [0, 1]"
+    )
     hallucination_risk: float = Field(
         ..., description="Risk level of model hallucination or fabrication in the response in the range [0, 1]"
     )

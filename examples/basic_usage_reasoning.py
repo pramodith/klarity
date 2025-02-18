@@ -1,7 +1,7 @@
 # basic_usage_reasoning.py
 import os
-import torch
 
+import torch
 from dotenv import load_dotenv
 from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorList
 

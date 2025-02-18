@@ -1,9 +1,11 @@
 # core/together_wrapper.py
-from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel
 from together import Together
 
 from ..utils import TOGETHER_JSON_MODE_SUPPORTED_MODELS
+
 
 class TogetherModelWrapper:
     """Wrapper for Together AI models supporting both text and vision"""
@@ -34,14 +36,14 @@ class TogetherModelWrapper:
         messages = [{"role": "user", "content": content}]
 
         response = self.client.chat.completions.create(
-            model=self.model_name, 
-            messages=messages, 
-            temperature=temperature, 
-            max_tokens=max_tokens, stream=False, 
-            response_format={
-                "type": "json_object",
-                "schema": response_model.model_json_schema()
-            } if self.supports_json_mode else None
+            model=self.model_name,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=False,
+            response_format={"type": "json_object", "schema": response_model.model_json_schema()}
+            if self.supports_json_mode
+            else None,
         )
 
         try:
@@ -59,9 +61,8 @@ class TogetherModelWrapper:
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=800,
-            response_format={
-                "type": "json_object",
-                "schema": response_model.model_json_schema()
-            } if self.supports_json_mode else None
+            response_format={"type": "json_object", "schema": response_model.model_json_schema()}
+            if self.supports_json_mode
+            else None,
         )
         return response.choices[0].message.content

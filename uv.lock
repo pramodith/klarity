@@ -1574,6 +1574,7 @@ dependencies = [
     { name = "torch" },
     { name = "transformers" },
     { name = "vllm" },
+    { name = "xgrammar" },
 ]
 
 [package.dev-dependencies]
@@ -1600,6 +1601,7 @@ requires-dist = [
     { name = "torch", specifier = ">=2.0.0,<2.6.0" },
     { name = "transformers", specifier = ">=4.41.0" },
     { name = "vllm", specifier = ">=0.7.2" },
+    { name = "xgrammar", specifier = "==0.1.11" },
 ]
 
 [package.metadata.requires-dev]
@@ -4497,31 +4499,30 @@ wheels = [
 
 [[package]]
 name = "xgrammar"
-version = "0.1.13"
+version = "0.1.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pybind11", marker = "(python_full_version >= '3.10' and sys_platform == 'darwin') or (platform_machine != 'arm64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
-    { name = "pydantic", marker = "(python_full_version >= '3.10' and sys_platform == 'darwin') or (platform_machine != 'arm64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
-    { name = "pytest", marker = "(python_full_version >= '3.10' and sys_platform == 'darwin') or (platform_machine != 'arm64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
-    { name = "sentencepiece", marker = "(python_full_version >= '3.10' and sys_platform == 'darwin') or (platform_machine != 'arm64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
-    { name = "tiktoken", marker = "(python_full_version >= '3.10' and sys_platform == 'darwin') or (platform_machine != 'arm64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
-    { name = "torch", marker = "(python_full_version >= '3.10' and sys_platform == 'darwin') or (platform_machine != 'arm64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
-    { name = "transformers", marker = "(python_full_version >= '3.10' and sys_platform == 'darwin') or (platform_machine != 'arm64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux')" },
+    { name = "pybind11" },
+    { name = "pydantic" },
+    { name = "pytest" },
+    { name = "sentencepiece" },
+    { name = "tiktoken" },
+    { name = "torch" },
+    { name = "transformers" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0f/9a/0d037283b55ae1877f2aa7e22ff8111d8e4527014a36e925452403198134/xgrammar-0.1.13-cp310-cp310-macosx_10_15_x86_64.whl", hash = "sha256:7c1017a39628f4242c679d746b50c087f37f0baadeca11145fc5d68260136c8c", size = 334931 },
-    { url = "https://files.pythonhosted.org/packages/e9/ad/15115d0fd8d2c561e08ac40bfa6cf266de2c6395afe26b08ce7d03987c9a/xgrammar-0.1.13-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d1a2613df6ac86710b5a09afbb1742ec27785f0222a13e4b7a8113f93d6201af", size = 401804 },
-    { url = "https://files.pythonhosted.org/packages/db/c2/716aa7fc7d1fa26e5c2c328808a99f47e75d6642403fe7a15a066852c69b/xgrammar-0.1.13-cp310-cp310-win_amd64.whl", hash = "sha256:bc7a29bd856fadcc6779466b016822a68083976174210ea86e698febc1ffc343", size = 319744 },
-    { url = "https://files.pythonhosted.org/packages/1f/a7/c764ac0f147bc99b9b5bb47bb947d745e4a1f163b49070ed9a66a672167a/xgrammar-0.1.13-cp311-cp311-macosx_10_15_x86_64.whl", hash = "sha256:6c9b605f6713a01e097a5793bb14a225644f0616615a333c57061ddb134ddc03", size = 336202 },
-    { url = "https://files.pythonhosted.org/packages/69/42/af450324910c0184fa982588b6597674c97077aae8a9753dbdf7e23fe57d/xgrammar-0.1.13-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:abbd74bf88bdb263d510d393ebbcab8244b314cd9c4efba683180ded17c8386f", size = 402387 },
-    { url = "https://files.pythonhosted.org/packages/61/70/52b4d44927f97ecf3e3e4d0c60cd1ecf201cda1b48a39a0d5b15c884cf08/xgrammar-0.1.13-cp311-cp311-win_amd64.whl", hash = "sha256:5d0ed6118652e5dd974423fa4b4759c6de6e16ff2f630a7f55558c0667c0aa25", size = 320741 },
-    { url = "https://files.pythonhosted.org/packages/b5/d1/26fad18851833e645cdf2750ee294e52962f7848695b42dbef1c287a34ca/xgrammar-0.1.13-cp312-cp312-macosx_10_15_x86_64.whl", hash = "sha256:2b8b638ae84afc0170d0c2361771f7b7f21695fbf982b52782b1a57f43927800", size = 336387 },
-    { url = "https://files.pythonhosted.org/packages/4a/2c/031301b1dc87670fe58aae88ae8d9cd9a12bed895b4103d5648b3b59f055/xgrammar-0.1.13-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d38885aff44cf06cdf457543fbfb1d104e2d3f4e77712f09590d20e30e7ef3e5", size = 401795 },
-    { url = "https://files.pythonhosted.org/packages/dd/c7/a0dd872fc96726623390c9b7f2d1983408166c6b6bcf8778897ba41f51fd/xgrammar-0.1.13-cp312-cp312-win_amd64.whl", hash = "sha256:9c569592cfda167b3c8dd45ea7a03afca926bdf050f2e70f87fbc265a9c89332", size = 321380 },
-    { url = "https://files.pythonhosted.org/packages/f3/a3/0c5ee2733ee38c8a27b79b9608826fc2834111bd40dbc749929e02192017/xgrammar-0.1.13-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f400de04c226336f7831cdd332c25b94852bb5fd3d2b63625461fdd23d13486f", size = 402564 },
-    { url = "https://files.pythonhosted.org/packages/b0/d3/3b2ff3a9935f1ea5dce8a42bc2ddc2141ac934eae998457c55422c11d268/xgrammar-0.1.13-cp39-cp39-macosx_10_15_x86_64.whl", hash = "sha256:9e050755afff2f65f2fb4880e46270faac0cba9067cdb366c8616d51198bd4ab", size = 335041 },
-    { url = "https://files.pythonhosted.org/packages/be/a4/3b901a4c9d06208bad8dfac892b7b7d39531e46fb6881304bb958c648e51/xgrammar-0.1.13-cp39-cp39-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:aec4671d522db5a79f31eed586cb1d25f8e8d650aafcde59f22fb236eeea5e1e", size = 401981 },
-    { url = "https://files.pythonhosted.org/packages/49/05/18e30051589deeed68558854cc281c2ad7ebab4c6698c0765c883dffd597/xgrammar-0.1.13-cp39-cp39-win_amd64.whl", hash = "sha256:d571d18185246ce36b04c9156a22b36f0cf1b4587f7f91a0818c999526496459", size = 318120 },
+    { url = "https://files.pythonhosted.org/packages/92/a6/959fbd93630d9bfa0907ae85ca95c6470f26743a0b6e2e5fa3e159065ab1/xgrammar-0.1.11-cp310-cp310-macosx_10_15_x86_64.whl", hash = "sha256:5ed31db2669dc499d9d29bb16f30b3395332ff9d0fb80b759697190a5ef5258b", size = 327094 },
+    { url = "https://files.pythonhosted.org/packages/ee/d3/203681602c32c41cabc7139b4e71f1514652bfc2b1c0733c33c037e2ae6d/xgrammar-0.1.11-cp310-cp310-macosx_13_0_arm64.whl", hash = "sha256:93bb6c10cbdf1a2bda3b458d97b47436657d780f98dccf3d266e17e13568c0a9", size = 288779 },
+    { url = "https://files.pythonhosted.org/packages/c8/00/90aa61e90dd375162784192d61c5cce813aa6d2803f0a588791d93fdfa05/xgrammar-0.1.11-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9c6f571121e4af45e3b5dc55f3dadd751cffff1f85f1c6fc5c4276db2bbed222", size = 396238 },
+    { url = "https://files.pythonhosted.org/packages/d9/72/e79666eb88a44a294051b6111bde049b455725066be7ca53756fa9fb1147/xgrammar-0.1.11-cp311-cp311-macosx_10_15_x86_64.whl", hash = "sha256:b2106bceb2ce313628af915f2c2b1c9865612026dd3c9feddbfcc69e4ee6c971", size = 328426 },
+    { url = "https://files.pythonhosted.org/packages/82/9d/e72009794b8be2f393b40e08888d4a8b9a46a2661c3930cb665d26471f22/xgrammar-0.1.11-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:b293443725eddad31cf7b407bb24d5f3156c4b12a2c8041743cb7068a69fadcb", size = 290145 },
+    { url = "https://files.pythonhosted.org/packages/66/43/52bb1e659c21270ddb9f16d9cb8417065dd3c4596136355652f358d0bc63/xgrammar-0.1.11-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7934c968371d55759cac35be3b218cdf4b13f323f535ea0faa233240bab803b9", size = 396890 },
+    { url = "https://files.pythonhosted.org/packages/f5/ce/a26aec534addb8cbd5dd9b80357110933048c601da7bf96bfd2b55e3e5b9/xgrammar-0.1.11-cp312-cp312-macosx_10_15_x86_64.whl", hash = "sha256:6ac3cbb0a82a3a9d07f0739f63b2e26cbef7855149d236057dcc7fee74b37970", size = 328483 },
+    { url = "https://files.pythonhosted.org/packages/59/58/10d2c3fbfd74e3761c685bb8ca1078052f0beb1458a86de1182453d228bd/xgrammar-0.1.11-cp312-cp312-macosx_13_0_arm64.whl", hash = "sha256:561f8d4307db8cf5d3c3b3ff46eda6d95379f6e801278dbf9153a9d5e8b6126c", size = 290150 },
+    { url = "https://files.pythonhosted.org/packages/48/27/9afa14acb41d765427c52639a24ec0c2b0e979c0b85b537dc26db629cc85/xgrammar-0.1.11-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:1854d0fe6b908a3d2d42251a62e627224dbf6035a4322b844b1b5a277e3d0461", size = 396358 },
+    { url = "https://files.pythonhosted.org/packages/7c/27/1cb153233a9ef5e0be23eb8eb3719fcc46d166d826adc698cb8d4a679eef/xgrammar-0.1.11-cp39-cp39-macosx_10_15_x86_64.whl", hash = "sha256:035ec93306543b99bf2141dcc7f1a6dd0c255753fc8b5a2b5f3289a59fed8e37", size = 327127 },
+    { url = "https://files.pythonhosted.org/packages/76/a8/0338d84ad5a4944d80c3c0218416d326ce0fc982c4b89a19f88e5f540759/xgrammar-0.1.11-cp39-cp39-macosx_13_0_arm64.whl", hash = "sha256:12dd579a7073c14981e01aeee566d20e60001bf90af23024e0e6692a770ff535", size = 288894 },
+    { url = "https://files.pythonhosted.org/packages/2d/ce/990c6cc24f5af2c8a93380f32731c562f344bd01886ae0e37940a42ddb2f/xgrammar-0.1.11-cp39-cp39-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3b3975dcf4b3ed7b16bbe3c068738b09847f841793e1c5e1b4a07dff36bbdc37", size = 396280 },
 ]
 
 [[package]]

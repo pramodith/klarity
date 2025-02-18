@@ -4,32 +4,32 @@ import os
 import re
 import tempfile
 import traceback
-import xgrammar as xgr
-
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
-from vllm import LLM, SamplingParams
-from vllm.sampling_params import GuidedDecodingParams
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import xgrammar as xgr
 from PIL import Image
 from pydantic import BaseModel
 from scipy.stats import entropy
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+from vllm import LLM, SamplingParams
+from vllm.sampling_params import GuidedDecodingParams
 
-from klarity.core.system_prompts import *
-from klarity.core.together_wrapper import TogetherModelWrapper
 from klarity.core.schemas.insight_schemas import InsightAnalysisResponseModel
 from klarity.core.schemas.reasoning_analysis_schemas import (
-    ReasoningStepIdentificationResponseModel,
     ReasoningStepAnalysisResponseModel,
+    ReasoningStepIdentificationResponseModel,
 )
-from klarity.core.schemas.vlm_analysis_schemas import VLMAnalysisResponseModel, EnhancedVLMAnalysisResponseModel
+from klarity.core.schemas.vlm_analysis_schemas import EnhancedVLMAnalysisResponseModel, VLMAnalysisResponseModel
+from klarity.core.system_prompts import *
+from klarity.core.together_wrapper import TogetherModelWrapper
 
 from ..models import AttentionData, TokenInfo, UncertaintyAnalysisRequest, UncertaintyMetrics
+
 
 class EntropyAnalyzer:
     def __init__(
@@ -157,7 +157,7 @@ class EntropyAnalyzer:
         # If instance is vllm, use guided decoding
         elif isinstance(self.insight_model, LLM):
             guided_decoding_params = GuidedDecodingParams(
-                json = self.insight_response_model.model_json_schema(),
+                json=self.insight_response_model.model_json_schema(),
             )
             sampling_params = SamplingParams(
                 guided_decoding=guided_decoding_params,
@@ -171,11 +171,11 @@ class EntropyAnalyzer:
                 sampling_params=sampling_params,
             )
             return response[0].outputs[0].text
-        
+
         # Assume HuggingFace model
         else:
             inputs = self.insight_tokenizer(prompt, return_tensors="pt").to(self.insight_model.device)
-            
+
             # Use xgrammar to enforce structured outputs
             tokenizer_info = xgr.TokenizerInfo.from_huggingface(self.insight_tokenizer)
             grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
@@ -227,7 +227,6 @@ class ReasoningAnalyzer(EntropyAnalyzer):
         self.step_analysis_template = REASONING_STEP_ANALYSIS_PROMPT_TEMPLATE
         self.reasoning_step_analysis_response_model = reasoning_step_analysis_response_model
         self.reasoning_step_identification_response_model = reasoning_step_identification_response_model
-
 
     def identify_reasoning_steps(self, text: str) -> List[Dict]:
         """Use the insight model to identify reasoning steps"""
@@ -285,9 +284,7 @@ class ReasoningAnalyzer(EntropyAnalyzer):
             )
 
             if self.together_model:
-                response = self.together_model.generate_insight(
-                    prompt, self.reasoning_step_analysis_response_model
-                )
+                response = self.together_model.generate_insight(prompt, self.reasoning_step_analysis_response_model)
                 print(f"\nDEBUG - Raw response from analysis: {response}")
 
                 # Find JSON content
@@ -712,11 +709,11 @@ class EnhancedVLMAnalyzer(VLMAnalyzer):
 
             # Use the wrapper to generate insight with the attention visualization
             return self.together_model.generate_insight_with_image(
-                prompt=prompt, 
-                image_data=[attention_base64], 
-                temperature=0.7, 
+                prompt=prompt,
+                image_data=[attention_base64],
+                temperature=0.7,
                 max_tokens=800,
-                response_model=self.visual_insight_response_model
+                response_model=self.visual_insight_response_model,
             )
 
         except Exception as e:

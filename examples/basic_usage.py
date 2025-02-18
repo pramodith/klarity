@@ -1,10 +1,10 @@
 # basic_usage.py
+import json
+
 from transformers import AutoModelForCausalLM, AutoTokenizer, LogitsProcessorList
 
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
-
-import json
 
 # Initialize your model
 model_name = "HuggingFaceTB/SmolLM2-135M-Instruct"

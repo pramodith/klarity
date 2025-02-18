@@ -1,12 +1,12 @@
+import json
+import os
+
 from dotenv import load_dotenv
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
-
-import json
-import os
 
 load_dotenv()
 together_api_key = os.getenv("TOGETHER_API_KEY")
@@ -18,8 +18,8 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 estimator = UncertaintyEstimator(
     top_k=5,
     analyzer=EntropyAnalyzer(
-        insight_model = llm,
-        insight_tokenizer = tokenizer,
+        insight_model=llm,
+        insight_tokenizer=tokenizer,
         min_token_prob=0.01,
     ),
 )

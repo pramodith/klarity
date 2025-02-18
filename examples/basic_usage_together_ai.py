@@ -1,8 +1,10 @@
 # basic_usage_together_ai.py
+import os
+
+from dotenv import load_dotenv
+
 from klarity import UncertaintyEstimator
 from klarity.core.analyzer import EntropyAnalyzer
-from dotenv import load_dotenv
-import os
 
 load_dotenv()
 together_api_key = os.getenv("TOGETHER_API_KEY")
