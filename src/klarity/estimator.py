@@ -93,7 +93,24 @@ class UncertaintyEstimator:
         processor: Optional[LogitsProcessor] = None,
         prompt: Optional[str] = None,
         image: Optional[Any] = None,
+        get_insights: bool = True
     ) -> UncertaintyAnalysisResult:
+        """
+        Analyze generation output by computing uncertainty metrics
+        and generate insights if requested
+
+        Args:
+            generation_output: Generation output from HuggingFace model
+            model: HuggingFace model
+            tokenizer: HuggingFace tokenizer
+            processor: HuggingFace logits processor
+            prompt: Prompt used for generation
+            image: Image used for VLM analysis
+            get_insights: Whether to generate insights
+        
+        Returns:
+            UncertaintyAnalysisResult: Result of the analysis
+        """
         all_metrics = []
         generated_text = ""
         attention_data = None
@@ -103,6 +120,7 @@ class UncertaintyEstimator:
         is_vlm = hasattr(generation_output, "attentions") and isinstance(
             self.analyzer, (VLMAnalyzer, EnhancedVLMAnalyzer)
         )
+        overall_insight = None
 
         if is_vlm:
             if not hasattr(self.analyzer, "patch_size") or self.analyzer.patch_size is None:
@@ -137,25 +155,26 @@ class UncertaintyEstimator:
                     )
                     all_metrics.append(metrics)
 
-            # Generate insight based on analyzer type
-            if self.is_enhanced_vlm:
-                # For EnhancedVLMAnalyzer, always use visual analysis
-                overall_insight = self.analyzer.generate_overall_insight(
-                    metrics_list=all_metrics,
-                    input_query=input_query,
-                    generated_text=generated_text,
-                    attention_data=attention_data,
-                    image=image,
-                    use_visual_analysis=True
-                )
-            else:
-                # For regular VLMAnalyzer
-                overall_insight = self.analyzer.generate_overall_insight(
-                    metrics_list=all_metrics,
-                    input_query=input_query,
-                    generated_text=generated_text,
-                    attention_data=attention_data
-                )
+            if get_insights:
+                # Generate insight based on analyzer type
+                if self.is_enhanced_vlm:
+                    # For EnhancedVLMAnalyzer, always use visual analysis
+                    overall_insight = self.analyzer.generate_overall_insight(
+                        metrics_list=all_metrics,
+                        input_query=input_query,
+                        generated_text=generated_text,
+                        attention_data=attention_data,
+                        image=image,
+                        use_visual_analysis=True
+                    )
+                else:
+                    # For regular VLMAnalyzer
+                    overall_insight = self.analyzer.generate_overall_insight(
+                        metrics_list=all_metrics,
+                        input_query=input_query,
+                        generated_text=generated_text,
+                        attention_data=attention_data
+                    )
 
             return UncertaintyAnalysisResult(
                 token_metrics=all_metrics,
@@ -236,13 +255,14 @@ class UncertaintyEstimator:
                         token_predictions=token_info,
                     )
                     all_metrics.append(metrics)
-
+            
             # Generate insight for non-VLM case
-            overall_insight = self.analyzer.generate_overall_insight(
-                all_metrics,
-                input_query=input_query,
-                generated_text=generated_text
-            )
+            if get_insights:
+                overall_insight = self.analyzer.generate_overall_insight(
+                    all_metrics,
+                    input_query=input_query,
+                    generated_text=generated_text
+                )
 
         return UncertaintyAnalysisResult(
             token_metrics=all_metrics,
