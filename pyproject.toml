@@ -18,6 +18,12 @@ dependencies = [
     "pydantic>=2.0.0",
     "together==1.4.0",
     "matplotlib>=3.9.4",
+    "ipykernel>=6.29.5",
+    "datasets>=3.3.1",
+    "litellm>=1.61.9",
+    "pandas>=2.2.3",
+    "tqdm>=4.67.1",
+    "model2vec>=0.4.0",
 ]
 
 [project.urls]
