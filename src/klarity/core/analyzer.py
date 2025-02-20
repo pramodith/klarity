@@ -41,7 +41,7 @@ class EntropyAnalyzer:
         insight_prompt_template: Optional[str] = None,
         insight_response_model: BaseModel = InsightAnalysisResponseModel,
     ):
-        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.embedding_model = SentenceTransformer("minishlab/potion-base-8M")
         self.min_token_prob = min_token_prob
 
         # Initialize Together AI model if specified
